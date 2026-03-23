@@ -1,19 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma-client';
-import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UsersService {
-  private prisma: PrismaClient;
-
-  constructor() {
-    const adapter = new PrismaPg({
-      connectionString: process.env.DATABASE_URL,
-    });
-
-    this.prisma = new PrismaClient({ adapter });
-  }
+  constructor(private prisma: PrismaService) {}
 
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({ where: { email } });

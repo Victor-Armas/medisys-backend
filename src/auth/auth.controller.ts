@@ -1,32 +1,33 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
-// @Controller('auth') significa que todas las rutas aquí empiezan con /auth
-// Combinado con el prefijo global 'api' del main.ts → /api/auth
+// Extendemos el tipo Request de Express para incluir `user`.
+// NestJS lo agrega ahí después de que el JwtGuard valida el token,
+// pero TypeScript no lo sabe a menos que se lo digamos explícitamente.
+interface RequestWithUser extends Request {
+  user: {
+    id: string;
+    email: string;
+    role: string;
+    name: string;
+  };
+}
+
 @Controller('auth')
 export class AuthController {
-  constructor(
-    // NestJS inyecta AuthService automáticamente
-    private authService: AuthService,
-  ) {}
+  constructor(private authService: AuthService) {}
 
-  /**
-   * POST /api/auth/login
-   * Recibe email y password, retorna JWT si son válidos
-   *
-   * Ejemplo de body:
-   * {
-   *   "email": "doctor@clinica.mx",
-   *   "password": "Admin1234!"
-   * }
-   */
   @Post('login')
-  login(
-    // @Body() extrae el JSON del cuerpo de la petición
-    @Body() body: { email: string; password: string },
-  ) {
-    // Delega toda la lógica al servicio
-    // El controlador nunca debe tener lógica de negocio
-    return this.authService.login(body.email, body.password);
+  login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto.email, loginDto.password);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  getProfile(@Req() req: RequestWithUser) {
+    return req.user;
   }
 }
