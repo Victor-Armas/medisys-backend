@@ -24,8 +24,8 @@ model User {
   email     String   @unique
   password  String
   name      String
-  role      Role     @default(DOCTOR)
-  isActive  Boolean  @default(true)
+  role      Role     @default(RECEPCIONISTA)
+  isActive  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

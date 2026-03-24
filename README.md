@@ -1,98 +1,183 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# medisys-backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+API REST para sistema de gestión de consultorio médico, construida con NestJS 11, Prisma 7 y PostgreSQL. Arquitectura modular preparada para multi-consultorio y expansión futura a app móvil.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## Stack tecnológico
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+| Capa          | Tecnología                          |
+| ------------- | ----------------------------------- |
+| Framework     | NestJS 11                           |
+| ORM           | Prisma 7                            |
+| Base de datos | PostgreSQL                          |
+| Autenticación | JWT + Passport                      |
+| Validación    | class-validator / class-transformer |
+| Hashing       | bcryptjs                            |
+| Runtime       | Node.js                             |
 
-## Project setup
+---
 
-```bash
-$ npm install
-```
+## Requisitos previos
 
-## Compile and run the project
+- Node.js 20+
+- PostgreSQL corriendo localmente o en Railway/Render
+- Variables de entorno configuradas (ver sección `.env`)
+
+---
+
+## Instalación
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
+---
+
+## Variables de entorno
+
+Crea un archivo `.env` en la raíz del proyecto:
+
+```env
+DATABASE_URL="postgresql://usuario:password@localhost:5432/medisys"
+JWT_SECRET="tu_secreto_muy_largo_y_seguro"
+JWT_EXPIRES_IN="7d"
+PORT=3001
+```
+
+---
+
+## Comandos disponibles
 
 ```bash
-# unit tests
-$ npm run test
+# Desarrollo con hot reload
+npm run start:dev
 
-# e2e tests
-$ npm run test:e2e
+# Producción
+npm run build
+npm run start:prod
 
-# test coverage
-$ npm run test:cov
+# Generar cliente de Prisma
+npx prisma generate
+
+# Correr migraciones
+npx prisma migrate dev
+
+# Poblar base de datos con usuario inicial
+npx prisma migrate dev --seed
+
+# Abrir Prisma Studio (explorador visual de BD)
+npx prisma studio
+
+# Linting
+npm run lint
+
+# Formateo de código
+npm run format
 ```
 
-## Deployment
+---
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## Estructura del proyecto
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+```
+medisys-backend/
+├── prisma/
+│   ├── migrations/          # Historial de migraciones SQL
+│   ├── schema.prisma        # Modelos de base de datos
+│   └── seed.ts              # Usuario inicial para desarrollo
+├── src/
+│   ├── auth/
+│   │   ├── dto/             # Validación de datos de entrada
+│   │   ├── guards/          # JwtAuthGuard
+│   │   ├── strategies/      # JwtStrategy (Passport)
+│   │   ├── auth.controller.ts
+│   │   ├── auth.module.ts
+│   │   └── auth.service.ts
+│   ├── prisma/              # PrismaModule global + PrismaService
+│   ├── users/               # UsersModule + UsersService
+│   ├── app.module.ts        # Módulo raíz
+│   └── main.ts              # Bootstrap + configuración global
+├── prisma.config.ts         # Configuración de Prisma 7
+├── tsconfig.json
+└── package.json
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
-## Resources
+## Módulos implementados
 
-Check out a few resources that may come in handy when working with NestJS:
+### Auth (`/api/auth`)
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Autenticación basada en JWT con control de acceso por roles.
 
-## Support
+| Método | Endpoint          | Acceso        | Descripción                           |
+| ------ | ----------------- | ------------- | ------------------------------------- |
+| POST   | `/api/auth/login` | Público       | Login con email y password            |
+| GET    | `/api/auth/me`    | JWT requerido | Retorna datos del usuario autenticado |
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Users
 
-## Stay in touch
+Servicio interno. Expone `findByEmail()` y `create()` para uso de otros módulos. No tiene controller propio aún.
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+---
 
-## License
+## Roles del sistema
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+| Rol                 | Descripción                                |
+| ------------------- | ------------------------------------------ |
+| `ADMIN_SISTEMA`     | Administrador global de la plataforma      |
+| `ADMIN_CONSULTORIO` | Administrador de un consultorio específico |
+| `DOCTOR`            | Médico — acceso a expedientes y recetas    |
+| `RECEPCIONISTA`     | Gestión de citas y pacientes               |
+
+---
+
+## Decisiones técnicas importantes
+
+**Prisma 7 con adapter-pg**
+Prisma 7 requiere pasar el adapter explícitamente en el constructor. El cliente se genera en `generated/prisma/` (no en `node_modules`). PrismaService usa `super({ adapter })`.
+
+**PrismaModule global**
+Decorado con `@Global()` para que `PrismaService` esté disponible en todos los módulos sin importarlo individualmente.
+
+**Path aliases en runtime**
+Los alias `@auth/*`, `@users/*` definidos en `tsconfig.json` no funcionan en runtime con CommonJS. Los imports usan rutas relativas directas. El alias `@prisma-client` solo funciona en el seed con `tsx`.
+
+**Seed con tsx**
+El cliente generado de Prisma 7 es ESM. Para correr el seed fuera de NestJS se usa `tsx` en lugar de `ts-node`.
+
+---
+
+## Usuario de prueba (seed)
+
+```
+Email:    doctor@clinica.mx
+Password: Admin1234!
+Rol:      DOCTOR
+```
+
+---
+
+## Módulos planificados (roadmap)
+
+- [ ] Usuarios — CRUD completo con control por roles
+- [ ] Pacientes
+- [ ] Citas médicas
+- [ ] Expediente clínico
+- [ ] Recetas médicas PDF (React PDF + Cloudinary)
+- [ ] Multi-consultorio
+- [ ] Refresh tokens
+- [ ] Portal paciente (futuro)
+- [ ] Laboratorio clínico (futuro)
+
+---
+
+## Hosting recomendado
+
+| Servicio         | Plataforma                     |
+| ---------------- | ------------------------------ |
+| Backend API      | Railway o Render               |
+| Base de datos    | PostgreSQL en Railway o Render |
+| Archivos médicos | Cloudinary                     |
+| Frontend         | Vercel                         |
