@@ -9,7 +9,8 @@ export interface JwtPayload {
   sub: string; // ID del usuario (estándar JWT)
   email: string;
   role: string;
-  name: string;
+  firstName: string;
+  lastNamePaternal: string;
 }
 
 // PassportStrategy(Strategy) conecta la librería passport-jwt con NestJS.
@@ -33,7 +34,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       id: payload.sub,
       email: payload.email,
       role: payload.role,
-      name: payload.name,
+      firstName: payload.firstName,
+      lastNamePaternal: payload.lastNamePaternal,
     };
   }
 }

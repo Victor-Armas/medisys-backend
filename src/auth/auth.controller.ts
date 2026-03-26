@@ -7,12 +7,13 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 // Extendemos el tipo Request de Express para incluir `user`.
 // NestJS lo agrega ahí después de que el JwtGuard valida el token,
 // pero TypeScript no lo sabe a menos que se lo digamos explícitamente.
-interface RequestWithUser extends Request {
+export interface RequestWithUser extends Request {
   user: {
     id: string;
     email: string;
     role: string;
-    name: string;
+    firstName: string;
+    lastNamePaternal: string;
   };
 }
 
@@ -22,6 +23,11 @@ export class AuthController {
 
   @Post('login')
   login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto.email, loginDto.password);
+  }
+
+  @Post('patient/login')
+  patientLogin(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto.email, loginDto.password);
   }
 

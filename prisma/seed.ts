@@ -17,8 +17,12 @@ async function main() {
     create: {
       email: 'victor.961004@outlook.com',
       password,
-      name: 'Admin. Victor Armas',
-      role: 'ADMIN_SISTEMA',
+      firstName: 'Victor',
+      middleName: 'Jesus',
+      lastNamePaternal: 'Garzon',
+      lastNameMaternal: 'Armas',
+      role: 'ADMIN_SYSTEM',
+      isActive: true,
     },
   });
 

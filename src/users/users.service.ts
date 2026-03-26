@@ -15,8 +15,8 @@ export class UsersService {
   //Crea un nuevo usuario. @throws ConflictException si el email ya está registrado
   async create(dto: CreateUserDTO) {
     // Verificar si el email ya existe antes de intentar insertar
-    const existe = await this.findByEmail(dto.email);
-    if (existe) {
+    const EmailExists = await this.findByEmail(dto.email);
+    if (EmailExists) {
       throw new ConflictException('El email ya está registrado');
     }
 
@@ -27,13 +27,17 @@ export class UsersService {
       data: {
         email: dto.email,
         password: hashedPassword,
-        name: dto.name,
+        firstName: dto.firstName,
+        middleName: dto.middleName,
+        lastNamePaternal: dto.lastNamePaternal,
+        lastNameMaternal: dto.lastNameMaternal,
         role: dto.role,
       },
       select: {
         id: true,
         email: true,
-        name: true,
+        firstName: true,
+        lastNamePaternal: true,
         role: true,
         isActive: true,
         createdAt: true,

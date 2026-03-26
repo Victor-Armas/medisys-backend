@@ -13,19 +13,141 @@ datasource db {
 }
 
 enum Role {
-  ADMIN_SISTEMA
-  ADMIN_CONSULTORIO
-  DOCTOR
-  RECEPCIONISTA
+  ADMIN_SYSTEM   // Administrador del sistema — acceso total a todos los consultorios
+  MAIN_DOCTOR    // Médico principal — acceso total dentro de su(s) consultorio(s)
+  DOCTOR         // Médico — solo ve sus propios pacientes y citas
+  RECEPTIONIST   // Recepcionista — gestión de citas y pacientes, sin acceso al expediente clínico
+  PATIENT        // PACIENTE — Usuario por defecto
 }
 
+// ============================================================
+// USER — Usuario del sistema (staff: admin, médicos, recepcionistas)
+// ============================================================
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      Role     @default(RECEPCIONISTA)
-  isActive  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(uuid())
+  email         String   @unique               // Correo electrónico (usado para login)
+  password      String                         // Contraseña hasheada con bcrypt
+  firstName            String                              // Nombre
+  middleName           String?                             // Segundo Nombre Opcional
+  lastNamePaternal     String                              // Apellido paterno
+  lastNameMaternal     String                             // Apellido materno
+  role          Role     @default(PATIENT) // Rol en el sistema
+  photoUrl      String?                        // Foto de perfil en Cloudinary (opcional, solo médicos)
+  photoPublicId String?                        // public_id en Cloudinary para eliminación
+  phone         String?                        // Teléfono personal
+  isActive      Boolean  @default(true)       // Activo por defecto 
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Solo existe si el usuario es DOCTOR o MAIN_DOCTOR
+  doctorProfile DoctorProfile?
+
+  // Auditoría de acciones
+  // createdAppointments Appointment[]  @relation("AppointmentCreatedBy") // Citas que este usuario registró
+  // consultations       Consultation[] @relation("ConsultationDoctor")   // Consultas que realizó como médico
+  // prescriptions       Prescription[] @relation("PrescriptionDoctor")   // Recetas que emitió
+}
+
+// ============================================================
+// DOCTOR PROFILE — Perfil médico (extensión de User para doctores)
+// Contiene datos clínicos, profesionales y dirección personal.
+// ============================================================
+
+model DoctorProfile {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Dirección personal (para auditoría y datos de contacto)
+  address             String                        // Domicilio (calle y número)
+  numHome             String                        // Nimero de casa 
+  colony              String                        // Colonia 
+  city                String                        // Ciudad
+  state               String                        // Estado
+  zipCode             String                        // Código postal
+
+  // Datos profesionales
+  specialty           String?                        // Especialidad médica (ej: "Medicina General")
+  professionalLicense String                        // Cédula profesional
+  university          String?                        // Universidad donde se tituló
+  fullTitle           String?                        // Título completo para imprimir (ej: "Dra. Carolina Cervantes Arellano")
+
+  // Firma digital para estampar en recetas y documentos PDF
+  signatureUrl        String?                        // URL de la imagen de la firma en Cloudinary
+  signaturePublicId   String?                        // public_id en Cloudinary para eliminación
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Consultorios donde este médico atiende
+  doctorClinics DoctorClinic[]
+}
+
+// ============================================================
+// CLINIC — Consultorio
+// Cada sede física (o modalidad de domicilio) es un registro aquí.
+// Un mismo médico puede atender en múltiples consultorios.
+// ============================================================
+
+model Clinic {
+  id                  String   @id @default(uuid())
+  name                String                         // Nombre del consultorio
+  slug                String   @unique               // Identificador URL amigable (ej: "clinica-norte")
+  logoUrl             String?                        // URL del logo en Cloudinary
+  logoPublicId        String?                        // public_id en Cloudinary para poder eliminarlo
+  phone               String?                        // Teléfono del consultorio
+  email               String?                        // Correo del consultorio
+  address             String?                        // Dirección (calle y número)
+  city                String?                        // Ciudad
+  state               String?                        // Estado
+  zipCode             String?                        // Código postal
+  rfc                 String?                        // RFC para facturación
+  professionalLicense String?                        // Cédula profesional del consultorio (si aplica)
+  brandColor          String?                        // Color hex para personalizar PDFs y documentos
+  isActive            Boolean  @default(true)        // Activo / inactivo
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relaciones
+  doctorClinics  DoctorClinic[]                      // Médicos asignados a este consultorio
+  // appointments   Appointment[]                       // Citas agendadas en este consultorio
+  // patientClinics PatientClinic[]                     // Pacientes atendidos en este consultorio
+  schedules      Schedule[]                          // Horarios de atención de este consultorio
+}
+
+// ============================================================
+// SCHEDULE — Horarios de atención por consultorio
+// Define los días y horas en que cada consultorio atiende.
+// ============================================================
+
+model Schedule {
+  id                  String  @id @default(uuid())
+  clinicId            String
+  clinic              Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  weekDay             Int     // Día de la semana: 0=Domingo, 1=Lunes ... 6=Sábado
+  startTime           String  // Hora de inicio (ej: "08:00")
+  endTime             String  // Hora de fin (ej: "18:00")
+  appointmentDuration Int     @default(30) // Duración de cada cita en minutos
+  isActive            Boolean @default(true) // Permite deshabilitar un día sin eliminar el registro
+
+  @@unique([clinicId, weekDay])
+}
+
+// ============================================================
+// DOCTOR CLINIC — Relación Médico ↔ Consultorio (many-to-many)
+// Controla en qué consultorios puede operar cada médico.
+// ============================================================
+
+model DoctorClinic {
+  id              String        @id @default(uuid())
+  doctorProfileId String                             // FK al perfil del médico
+  clinicId        String                             // FK al consultorio
+  doctorProfile   DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  clinic          Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  isPrimary       Boolean       @default(false)      // true = consultorio base/principal del médico
+  isActive        Boolean       @default(true)       // Permite suspender sin eliminar la relación
+  assignedAt      DateTime      @default(now())      // Fecha en que se le asignó el consultorio
+
+  @@unique([doctorProfileId, clinicId])
 }

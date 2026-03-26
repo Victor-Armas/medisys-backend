@@ -25,18 +25,22 @@ export class AuthService {
     // Paso 1: buscar usuario
     const user = await this.usersService.findByEmail(email);
 
-    // Paso 2: verificar que existe y está activo
-    // Usamos el mismo mensaje para ambos casos por seguridad
-    // (no queremos revelar si el email existe o no)
-    if (!user || !user.isActive) {
-      throw new UnauthorizedException('Credenciales inválidas');
+    if (!user) {
+      throw new UnauthorizedException('Cuenta Inexistente');
     }
 
-    // Paso 3: comparar password con hash
+    // Paso 2: comparar password con hash
     // bcrypt.compare() hashea el password recibido y lo compara con el guardado
     const passwordValido = await bcrypt.compare(password, user.password);
     if (!passwordValido) {
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new UnauthorizedException('Password Incorrecto');
+    }
+
+    // Paso 3: verificar que está activo
+    if (!user.isActive) {
+      throw new UnauthorizedException(
+        'Tu cuenta está desactivada. Por favor, contacta al administrador',
+      );
     }
 
     // Paso 4: crear el payload del JWT
@@ -45,7 +49,8 @@ export class AuthService {
       sub: user.id, // "sub" es el estándar JWT para el ID del usuario
       email: user.email,
       role: user.role,
-      name: user.name,
+      firstName: user.firstName,
+      lastNamePaternal: user.lastNamePaternal,
     };
 
     return {
@@ -54,7 +59,8 @@ export class AuthService {
       // También retornamos datos básicos del usuario para el frontend
       user: {
         id: user.id,
-        name: user.name,
+        firstName: user.firstName,
+        lastNamePaternal: user.lastNamePaternal,
         email: user.email,
         role: user.role,
       },
