@@ -1,7 +1,12 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { CreateUserDTO } from '@users/dto/create-user.dto';
+import { Role } from '@generated/prisma/enums';
 
 @Injectable()
 export class UsersService {
@@ -43,5 +48,50 @@ export class UsersService {
         createdAt: true,
       },
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // LISTAR todos los usuarios activos excelto doctores y main doctor
+  // ─────────────────────────────────────────────────────────────
+  async findAll(userRole: string) {
+    const hasFullAccess = ['ADMIN_SYSTEM', 'MAIN_DOCTOR'].includes(userRole);
+
+    return this.prisma.user.findMany({
+      where: {
+        role: { in: [Role.ADMIN_SYSTEM, Role.RECEPTIONIST] },
+        ...(hasFullAccess ? {} : { isActive: true }),
+      },
+      select: {
+        id: true,
+        firstName: true,
+        middleName: true, // Añadido (es opcional en tu prisma)
+        lastNamePaternal: true, // <--- Nombre correcto
+        lastNameMaternal: true, // <--- Nombre correcto
+        email: true,
+        role: true,
+        isActive: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // BUSCAR un usuario (no doctor) por su userId
+  // ─────────────────────────────────────────────────────────────
+  async findOne(userId: string) {
+    const doctor = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        role: { in: [Role.ADMIN_SYSTEM, Role.RECEPTIONIST] },
+        doctorProfile: { is: null },
+      },
+    });
+
+    if (!doctor) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+    return doctor;
   }
 }

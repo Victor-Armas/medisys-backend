@@ -33,10 +33,10 @@ export class DoctorsService {
 
     // 2. Validar clinicIds si vienen en el DTO
     if (dto.clinicIds?.length) {
-      await this.validateClinics(dto.clinicIds as string[]);
+      await this.validateClinics(dto.clinicIds);
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password as string, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     // 3. Transacción: User + DoctorProfile + DoctorClinic (si aplica)
     return this.prisma.$transaction(async (tx) => {

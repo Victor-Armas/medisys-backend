@@ -32,7 +32,7 @@ model User {
   middleName           String?                             // Segundo Nombre Opcional
   lastNamePaternal     String                              // Apellido paterno
   lastNameMaternal     String                             // Apellido materno
-  role          Role     @default(PATIENT) // Rol en el sistema
+  role          Role     @default(RECEPTIONIST) // Rol en el sistema
   photoUrl      String?                        // Foto de perfil en Cloudinary (opcional, solo médicos)
   photoPublicId String?                        // public_id en Cloudinary para eliminación
   phone         String?                        // Teléfono personal
