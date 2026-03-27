@@ -1,4 +1,13 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"],
+  "compilerOptions": {
+    "outDir": "./dist",
+    "paths": {
+      "@auth/*": ["src/auth/*"],
+      "@users/*": ["src/users/*"],
+      "@generated/*": ["generated/*"],
+      "@prisma-client": ["generated/prisma/client.ts"]
+    }
+  }
 }

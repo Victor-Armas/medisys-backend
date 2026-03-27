@@ -8,8 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { CreateDoctorDTO } from './dto/create-doctor.dto';
 import { AssignDoctorProfileDTO } from './dto/assign-doctor-profile.dto';
-import { Role } from '../../generated/prisma/client';
 import { DOCTOR_SELECT } from './constants/doctor.select';
+import { Role } from '@generated/prisma/enums';
 
 @Injectable()
 export class DoctorsService {

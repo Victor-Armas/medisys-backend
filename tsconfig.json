@@ -21,18 +21,10 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "paths": {
-      "@auth/*": [
-        "src/auth/*"
-      ],
-      "@users/*": [
-        "src/users/*"
-      ],
-      "@generated/*": [
-        "generated/*"
-      ],
-      "@prisma-client": [
-        "generated/prisma/client.ts"
-      ]
+      "@auth/*": ["src/auth/*"],
+      "@users/*": ["src/users/*"],
+      "@generated/*": ["generated/*"],
+      "@prisma-client": ["generated/prisma/client.ts"]
     }
   }
 }
