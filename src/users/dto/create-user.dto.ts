@@ -44,7 +44,7 @@ export class CreateUserDTO {
   @IsString({ message: ValidationMessages.IS_STRING })
   phone?: string;
 
-  // El rol es opcional — si no se manda, Prisma usa el default (PATIENT)
+  // El rol es opcional — si no se manda, Prisma usa el default (RECEPTIONIST)
   @IsOptional()
   @IsEnum(Role, { message: ValidationMessages.IS_ENUM })
   role?: Role;

@@ -1,5 +1,0 @@
--- AlterEnum
-ALTER TYPE "Role" ADD VALUE 'PATIENT';
-
--- AlterTable
-ALTER TABLE "User" ALTER COLUMN "role" SET DEFAULT 'PATIENT';

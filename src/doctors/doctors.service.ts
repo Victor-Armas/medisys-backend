@@ -10,10 +10,14 @@ import { CreateDoctorDTO } from './dto/create-doctor.dto';
 import { AssignDoctorProfileDTO } from './dto/assign-doctor-profile.dto';
 import { DOCTOR_SELECT } from './constants/doctor.select';
 import { Role } from '@generated/prisma/enums';
+import { ClinicsService } from 'src/clinics/clinics.service';
 
 @Injectable()
 export class DoctorsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private clinicsService: ClinicsService,
+  ) {}
 
   // ─────────────────────────────────────────────────────────────
   // FLUJO 1: Crear usuario + perfil médico en una sola operación
@@ -31,16 +35,18 @@ export class DoctorsService {
       throw new ConflictException('El email ya está registrado');
     }
 
-    // 2. Validar clinicIds si vienen en el DTO
     if (dto.clinicIds?.length) {
       await this.validateClinics(dto.clinicIds);
+      for (const clinicId of dto.clinicIds) {
+        await this.clinicsService.validateClinicCapacity(clinicId);
+      }
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     // 3. Transacción: User + DoctorProfile + DoctorClinic (si aplica)
     return this.prisma.$transaction(async (tx) => {
-      // 3a. Crear el usuario con rol DOCTOR
+      // 3a. Crear el usuario
       const user = await tx.user.create({
         data: {
           email: dto.email,
@@ -50,7 +56,7 @@ export class DoctorsService {
           lastNamePaternal: dto.lastNamePaternal,
           lastNameMaternal: dto.lastNameMaternal,
           phone: dto.phone,
-          role: Role.DOCTOR,
+          role: dto.role,
         },
         select: { id: true },
       });
@@ -114,9 +120,11 @@ export class DoctorsService {
       );
     }
 
-    // 3. Validar clinicIds si vienen en el DTO
     if (dto.clinicIds?.length) {
       await this.validateClinics(dto.clinicIds);
+      for (const clinicId of dto.clinicIds) {
+        await this.clinicsService.validateClinicCapacity(clinicId);
+      }
     }
 
     // 4. Transacción: actualizar rol + crear DoctorProfile + asignar clínicas

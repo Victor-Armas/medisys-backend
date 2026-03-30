@@ -77,6 +77,10 @@ model DoctorProfile {
   signatureUrl        String?                        // URL de la imagen de la firma en Cloudinary
   signaturePublicId   String?                        // public_id en Cloudinary para eliminación
 
+  isAvailable                Boolean @default(true)
+  defaultAppointmentDuration Int     @default(30)
+  canManageOwnSchedule       Boolean @default(false)
+
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -108,12 +112,12 @@ model Clinic {
   isActive            Boolean  @default(true)        // Activo / inactivo
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+  maxDoctors          Int      @default(1)            // Maximo de doctores por consultorio
 
   // Relaciones
   doctorClinics  DoctorClinic[]                      // Médicos asignados a este consultorio
   // appointments   Appointment[]                       // Citas agendadas en este consultorio
   // patientClinics PatientClinic[]                     // Pacientes atendidos en este consultorio
-  schedules      Schedule[]                          // Horarios de atención de este consultorio
 }
 
 // ============================================================
@@ -122,16 +126,13 @@ model Clinic {
 // ============================================================
 
 model Schedule {
-  id                  String  @id @default(uuid())
-  clinicId            String
-  clinic              Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  weekDay             Int     // Día de la semana: 0=Domingo, 1=Lunes ... 6=Sábado
-  startTime           String  // Hora de inicio (ej: "08:00")
-  endTime             String  // Hora de fin (ej: "18:00")
-  appointmentDuration Int     @default(30) // Duración de cada cita en minutos
-  isActive            Boolean @default(true) // Permite deshabilitar un día sin eliminar el registro
-
-  @@unique([clinicId, weekDay])
+  id             String       @id @default(uuid())
+  doctorClinicId String
+  doctorClinic   DoctorClinic @relation(fields: [doctorClinicId], references: [id], onDelete: Cascade)
+  weekDay        Int
+  startTime      String
+  endTime        String
+  isActive       Boolean      @default(true)
 }
 
 // ============================================================
@@ -148,6 +149,8 @@ model DoctorClinic {
   isPrimary       Boolean       @default(false)      // true = consultorio base/principal del médico
   isActive        Boolean       @default(true)       // Permite suspender sin eliminar la relación
   assignedAt      DateTime      @default(now())      // Fecha en que se le asignó el consultorio
+
+  schedules Schedule[]
 
   @@unique([doctorProfileId, clinicId])
 }

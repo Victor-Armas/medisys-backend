@@ -29,4 +29,12 @@ export const ValidationMessages = {
 
   // Firma
   SIGNATURE_URL: 'La firma debe ser una URL válida',
+
+  // Clínica
+  CLINIC_NAME_REQUIRED: 'El nombre del consultorio es obligatorio',
+  CLINIC_MAX_DOCTORS: 'La capacidad máxima debe ser al menos 1',
+  BRAND_COLOR_INVALID: 'El color debe ser un valor hex válido (ej: #FF5733)',
+  SCHEDULE_START_REQUIRED: 'La hora de inicio es obligatoria',
+  SCHEDULE_END_REQUIRED: 'La hora de fin es obligatoria',
+  WEEKDAY_INVALID: 'El día debe ser un número entre 0 (domingo) y 6 (sábado)',
 } as const;
