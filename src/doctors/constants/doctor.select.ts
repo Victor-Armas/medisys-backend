@@ -27,13 +27,27 @@ export const DOCTOR_PROFILE_SELECT = {
   fullTitle: true,
   signatureUrl: true,
   createdAt: true,
+
   doctorClinics: {
     where: { isActive: true },
     select: {
       id: true,
       isPrimary: true,
+      isActive: true,
       assignedAt: true,
+
       clinic: { select: CLINIC_BASIC_SELECT },
+
+      schedules: {
+        where: { isActive: true },
+        select: {
+          id: true,
+          weekDay: true,
+          startTime: true,
+          endTime: true,
+          isActive: true,
+        },
+      },
     },
   },
 } as const;
