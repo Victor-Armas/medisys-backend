@@ -12,6 +12,28 @@ export const CLINIC_BASIC_SELECT = {
   isActive: true,
 } as const;
 
+export const SCHEDULE_OVERRIDES_BASIC = {
+  id: true,
+  date: true,
+  startTime: true,
+  endTime: true,
+  type: true,
+  note: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+export const SCHEDULE_RANGE_BASIC = {
+  id: true,
+  weekDay: true,
+  startTime: true,
+  endTime: true,
+  dateFrom: true,
+  dateTo: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 // Fragmento para el Perfil (evita la anidación infinita visual)
 export const DOCTOR_PROFILE_SELECT = {
   id: true,
@@ -24,6 +46,7 @@ export const DOCTOR_PROFILE_SELECT = {
   specialty: true,
   professionalLicense: true,
   university: true,
+  defaultAppointmentDuration: true,
   fullTitle: true,
   signatureUrl: true,
   createdAt: true,
@@ -38,15 +61,12 @@ export const DOCTOR_PROFILE_SELECT = {
 
       clinic: { select: CLINIC_BASIC_SELECT },
 
-      schedules: {
+      scheduleRanges: {
         where: { isActive: true },
-        select: {
-          id: true,
-          weekDay: true,
-          startTime: true,
-          endTime: true,
-          isActive: true,
-        },
+        select: SCHEDULE_RANGE_BASIC,
+      },
+      scheduleOverrides: {
+        select: SCHEDULE_OVERRIDES_BASIC,
       },
     },
   },

@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -80,5 +81,19 @@ export class DoctorsController {
   @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR', 'RECEPTIONIST', 'PATIENT')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.doctorsService.findOne(id);
+  }
+
+  // PATCH /api/clinics/doctors/:doctorProfileId/availability
+  @Patch('doctors/:doctorProfileId/availability')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
+  toggleAvailability(
+    @Param('doctorProfileId', ParseUUIDPipe) doctorProfileId: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.doctorsService.toggleDoctorAvailability(
+      doctorProfileId,
+      req.user.id,
+      req.user.role,
+    );
   }
 }

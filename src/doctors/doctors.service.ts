@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -236,5 +237,43 @@ export class DoctorsService {
         `Los siguientes consultorios no existen o están inactivos: ${invalidIds.join(', ')}`,
       );
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // TOGGLE disponibilidad del médico (botón pausa global)
+  // Solo el propio médico, ADMIN o MAIN_DOCTOR pueden hacerlo
+  // ─────────────────────────────────────────────────────────────
+  async toggleDoctorAvailability(
+    doctorProfileId: string,
+    requestingUserId: string,
+    userRole: string,
+  ) {
+    const profile = await this.prisma.doctorProfile.findUnique({
+      where: { id: doctorProfileId },
+      include: { user: true },
+    });
+
+    console.log(profile);
+
+    if (!profile) throw new NotFoundException('Perfil médico no encontrado');
+
+    const isOwn = profile.user.id === requestingUserId;
+    const isAdmin = ['ADMIN_SYSTEM', 'MAIN_DOCTOR'].includes(userRole);
+
+    if (!isOwn && !isAdmin) {
+      throw new ForbiddenException(
+        'No tienes permiso para modificar esta disponibilidad',
+      );
+    }
+
+    return this.prisma.doctorProfile.update({
+      where: { id: doctorProfileId },
+      data: { isAvailable: !profile.isAvailable },
+      select: {
+        id: true,
+        isAvailable: true,
+        user: { select: { firstName: true, lastNamePaternal: true } },
+      },
+    });
   }
 }

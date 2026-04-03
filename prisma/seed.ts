@@ -310,14 +310,19 @@ async function main() {
   ];
 
   for (const s of [...mainSchedules, ...doctorSchedules]) {
-    const exists = await prisma.schedule.findFirst({
+    const rangeData = {
+      ...s,
+      dateFrom: '2026-01-01',
+      dateTo: '2026-12-31',
+    };
+    const exists = await prisma.scheduleRange.findFirst({
       where: {
         doctorClinicId: s.doctorClinicId,
         weekDay: s.weekDay,
         startTime: s.startTime,
       },
     });
-    if (!exists) await prisma.schedule.create({ data: s });
+    if (!exists) await prisma.scheduleRange.create({ data: rangeData });
   }
 
   console.log('✅ Seed completado');

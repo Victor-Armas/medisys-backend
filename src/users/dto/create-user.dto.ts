@@ -1,3 +1,4 @@
+import { Role } from '@generated/prisma/enums';
 import {
   IsEmail,
   IsEnum,
@@ -7,14 +8,6 @@ import {
   MinLength,
 } from 'class-validator';
 import { ValidationMessages } from 'src/common/validation/validation.messages';
-
-enum Role {
-  ADMIN_SYSTEM = 'ADMIN_SYSTEM', // Administrador del sistema — acceso total a todos los consultorios
-  MAIN_DOCTOR = 'MAIN_DOCTOR', // Médico principal — acceso total dentro de su(s) consultorio(s)
-  DOCTOR = 'DOCTOR', // Médico — solo ve sus propios pacientes y citas
-  RECEPTIONIST = 'RECEPTIONIST',
-  PATIENT = 'PATIENT',
-}
 
 export class CreateUserDTO {
   @IsEmail({}, { message: ValidationMessages.IS_EMAIL })

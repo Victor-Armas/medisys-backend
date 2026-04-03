@@ -37,4 +37,7 @@ export const ValidationMessages = {
   SCHEDULE_START_REQUIRED: 'La hora de inicio es obligatoria',
   SCHEDULE_END_REQUIRED: 'La hora de fin es obligatoria',
   WEEKDAY_INVALID: 'El día debe ser un número entre 0 (domingo) y 6 (sábado)',
+
+  // ScheduleOverride
+  SCHERRULE_OVERRIDE_DATE: 'La fecha es obligatoria',
 } as const;

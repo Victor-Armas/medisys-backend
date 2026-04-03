@@ -20,6 +20,12 @@ enum Role {
   PATIENT        // PACIENTE — Usuario por defecto
 }
 
+enum ScheduleOverrideType {
+  AVAILABLE                 //trabaja aunque normalmente no
+  UNAVAILABLE               //no trabaja
+  CUSTOM                    //horario distinto
+}
+
 // ============================================================
 // USER — Usuario del sistema (staff: admin, médicos, recepcionistas)
 // ============================================================
@@ -125,14 +131,35 @@ model Clinic {
 // Define los días y horas en que cada consultorio atiende.
 // ============================================================
 
-model Schedule {
+model ScheduleRange {
   id             String       @id @default(uuid())
   doctorClinicId String
   doctorClinic   DoctorClinic @relation(fields: [doctorClinicId], references: [id], onDelete: Cascade)
   weekDay        Int
   startTime      String
   endTime        String
+  dateFrom        String
+  dateTo          String
   isActive       Boolean      @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([doctorClinicId, dateFrom, dateTo])
+  @@index([doctorClinicId, weekDay])
+}
+
+model ScheduleOverride {
+  id              String   @id @default(uuid())
+  doctorClinicId  String
+  doctorClinic    DoctorClinic @relation(fields: [doctorClinicId], references: [id], onDelete: Cascade)
+  date            String
+  startTime       String?
+  endTime         String?
+  type            ScheduleOverrideType
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([doctorClinicId, date])
 }
 
 // ============================================================
@@ -150,7 +177,8 @@ model DoctorClinic {
   isActive        Boolean       @default(true)       // Permite suspender sin eliminar la relación
   assignedAt      DateTime      @default(now())      // Fecha en que se le asignó el consultorio
 
-  schedules Schedule[]
+  scheduleRanges ScheduleRange[]
+  scheduleOverrides ScheduleOverride[]
 
   @@unique([doctorProfileId, clinicId])
 }

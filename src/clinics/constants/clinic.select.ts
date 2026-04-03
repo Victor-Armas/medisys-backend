@@ -1,14 +1,25 @@
 import { Prisma } from '@generated/prisma/client';
 
-export const SCHEDULE_SELECT = {
+export const SCHEDULE_SELECT: Prisma.ScheduleRangeSelect = {
   id: true,
   weekDay: true,
   startTime: true,
   endTime: true,
+  dateFrom: true,
+  dateTo: true,
   isActive: true,
 } as const;
 
-export const DOCTOR_IN_CLINIC_SELECT = {
+export const SCHEDULE_OVERRIDE_SELECT: Prisma.ScheduleOverrideSelect = {
+  id: true,
+  date: true,
+  startTime: true,
+  endTime: true,
+  type: true,
+  note: true,
+} as const;
+
+export const DOCTOR_IN_CLINIC_SELECT: Prisma.DoctorClinicSelect = {
   id: true,
   isPrimary: true,
   isActive: true,
@@ -35,7 +46,8 @@ export const DOCTOR_IN_CLINIC_SELECT = {
       },
     },
   },
-  schedules: { select: SCHEDULE_SELECT },
+  scheduleRanges: { select: SCHEDULE_SELECT },
+  scheduleOverrides: { select: SCHEDULE_OVERRIDE_SELECT },
 } as const;
 
 export const CLINIC_SELECT: Prisma.ClinicSelect = {

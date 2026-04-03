@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -18,7 +19,11 @@ import { RequestWithUser } from '@auth/auth.controller';
 import { ClinicsService } from './clinics.service';
 import { CreateClinicDTO } from './dto/create-clinic.dto';
 import { UpdateClinicDTO } from './dto/update-clinic.dto';
-import { CreateScheduleDTO } from './dto/create-schedule.dto';
+import { CreateScheduleRangeDTO } from './dto/create-schedule-range.dto';
+import { CreateScheduleOverrideDTO } from './dto/create-schedule-override.dto';
+import { GetAvailabilityDto } from './dto/get-availability.dto';
+import { UpdateScheduleRangeDTO } from './dto/update-schedule-range.dto';
+import { UpdateScheduleOverrideDTO } from './dto/update-schedule-override.dto';
 
 @ApiTags('Clinics')
 @Controller('clinics')
@@ -61,36 +66,99 @@ export class ClinicsController {
     return this.clinicsService.toggle(id);
   }
 
-  // POST /api/clinics/schedules
-  @Post('schedules')
+  // POST /api/clinics/schedules/range
+  @Post('schedules/range')
   @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
-  addSchedule(@Body() dto: CreateScheduleDTO, @Req() req: RequestWithUser) {
-    return this.clinicsService.addSchedule(dto, req.user.id, req.user.role);
-  }
-
-  // DELETE /api/clinics/schedules/:scheduleId
-  @Delete('schedules/:scheduleId')
-  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
-  removeSchedule(
-    @Param('scheduleId', ParseUUIDPipe) scheduleId: string,
+  createScheduleRange(
+    @Body() dto: CreateScheduleRangeDTO,
     @Req() req: RequestWithUser,
   ) {
-    return this.clinicsService.removeSchedule(
-      scheduleId,
+    return this.clinicsService.createScheduleRange(
+      dto,
       req.user.id,
       req.user.role,
     );
   }
 
-  // PATCH /api/clinics/doctors/:doctorProfileId/availability
-  @Patch('doctors/:doctorProfileId/availability')
+  // POST /api/clinics/schedules/override
+  @Post('schedules/override')
   @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
-  toggleAvailability(
-    @Param('doctorProfileId', ParseUUIDPipe) doctorProfileId: string,
+  createScheduleOverride(
+    @Body() dto: CreateScheduleOverrideDTO,
     @Req() req: RequestWithUser,
   ) {
-    return this.clinicsService.toggleDoctorAvailability(
-      doctorProfileId,
+    return this.clinicsService.createScheduleOverride(
+      dto,
+      req.user.id,
+      req.user.role,
+    );
+  }
+
+  // DELETE /api/clinics/schedules/override/:overrideId
+  @Delete('schedules/override/:overrideId')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
+  deleteScheduleOverride(
+    @Param('overrideId', ParseUUIDPipe) overrideId: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.clinicsService.deleteScheduleOverride(
+      overrideId,
+      req.user.id,
+      req.user.role,
+    );
+  }
+
+  // GET /api/clinics/doctors/:doctorClinicId/availability
+  @Get('doctors/:doctorClinicId/availability')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR', 'RECEPTIONIST', 'PATIENT')
+  getDoctorAvailability(
+    @Param('doctorClinicId', ParseUUIDPipe) doctorClinicId: string,
+    @Query() dto: GetAvailabilityDto,
+  ) {
+    return this.clinicsService.getDoctorAvailability(doctorClinicId, dto);
+  }
+
+  // PATCH /api/clinics/schedules/range/:rangeId
+  @Patch('schedules/range/:rangeId')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
+  updateScheduleRange(
+    @Param('rangeId', ParseUUIDPipe) rangeId: string,
+    @Body() dto: UpdateScheduleRangeDTO,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.clinicsService.updateScheduleRange(
+      rangeId,
+      dto,
+      req.user.id,
+      req.user.role,
+    );
+  }
+
+  // DELETE /api/clinics/schedules/range/:rangeId
+  @Delete('schedules/range/:rangeId')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
+  deleteScheduleRange(
+    @Param('rangeId', ParseUUIDPipe) rangeId: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.clinicsService.deleteScheduleRange(
+      rangeId,
+      req.user.id,
+      req.user.role,
+    );
+  }
+
+  // PATCH /api/clinics/schedules/override/:overrideId
+  @Patch('schedules/override/:overrideId')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
+  updateScheduleOverride(
+    @Param('overrideId', ParseUUIDPipe) overrideId: string,
+    @Body() dto: UpdateScheduleOverrideDTO,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.clinicsService.updateScheduleOverride(
+      overrideId,
+      dto,
       req.user.id,
       req.user.role,
     );

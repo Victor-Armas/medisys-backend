@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "ScheduleOverride" ALTER COLUMN "date" SET DATA TYPE TEXT;
+
+-- AlterTable
+ALTER TABLE "ScheduleRange" ALTER COLUMN "dateFrom" SET DATA TYPE TEXT,
+ALTER COLUMN "dateTo" SET DATA TYPE TEXT;
