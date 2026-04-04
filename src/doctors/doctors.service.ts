@@ -253,8 +253,6 @@ export class DoctorsService {
       include: { user: true },
     });
 
-    console.log(profile);
-
     if (!profile) throw new NotFoundException('Perfil médico no encontrado');
 
     const isOwn = profile.user.id === requestingUserId;

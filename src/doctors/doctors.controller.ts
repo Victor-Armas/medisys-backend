@@ -84,7 +84,7 @@ export class DoctorsController {
   }
 
   // PATCH /api/clinics/doctors/:doctorProfileId/availability
-  @Patch('doctors/:doctorProfileId/availability')
+  @Patch('/:doctorProfileId/availability')
   @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
   toggleAvailability(
     @Param('doctorProfileId', ParseUUIDPipe) doctorProfileId: string,
