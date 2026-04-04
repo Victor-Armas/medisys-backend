@@ -6,6 +6,6 @@ import { RolesGuard } from '@auth/guards/roles.guard';
 @Module({
   controllers: [ClinicsController],
   providers: [ClinicsService, RolesGuard],
-  exports: [ClinicsService], // DoctorsService lo usará para validateClinicCapacity
+  exports: [ClinicsService],
 })
 export class ClinicsModule {}
