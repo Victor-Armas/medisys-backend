@@ -12,12 +12,15 @@ import { AssignDoctorProfileDTO } from './dto/assign-doctor-profile.dto';
 import { DOCTOR_SELECT } from './constants/doctor.select';
 import { Role } from '@generated/prisma/enums';
 import { ClinicsService } from 'src/clinics/clinics.service';
+import { UpdateDoctorProfileDTO } from './dto/update-doctor-profile.dto';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 
 @Injectable()
 export class DoctorsService {
   constructor(
     private prisma: PrismaService,
     private clinicsService: ClinicsService,
+    private cloudinary: CloudinaryService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────
@@ -213,6 +216,152 @@ export class DoctorsService {
     return doctor;
   }
 
+  // ─── UPDATE DOCTOR PROFILE ────────────────────────────────────────────────
+
+  async updateProfile(
+    doctorProfileId: string,
+    dto: UpdateDoctorProfileDTO,
+    requestingUserId: string,
+    userRole: string,
+  ) {
+    const profile = await this.prisma.doctorProfile.findUnique({
+      where: { id: doctorProfileId },
+      select: { id: true, userId: true },
+    });
+    if (!profile) throw new NotFoundException('Perfil médico no encontrado');
+
+    const isOwn = profile.userId === requestingUserId;
+    const isAdmin = ['ADMIN_SYSTEM', 'MAIN_DOCTOR'].includes(userRole);
+
+    // Doctors can edit their own profile; admins can edit any
+    if (!isOwn && !isAdmin) {
+      throw new ForbiddenException('No tienes permiso para editar este perfil');
+    }
+
+    // canManageOwnSchedule can only be changed by admins
+    if (dto.canManageOwnSchedule !== undefined && !isAdmin) {
+      throw new ForbiddenException(
+        'Solo un administrador puede cambiar este permiso',
+      );
+    }
+
+    return this.prisma.doctorProfile.update({
+      where: { id: doctorProfileId },
+      data: dto,
+    });
+  }
+
+  // ─── TOGGLE canManageOwnSchedule ─────────────────────────────────────────
+
+  async toggleSchedulePermission(doctorProfileId: string, userRole: string) {
+    const isAdmin = ['ADMIN_SYSTEM', 'MAIN_DOCTOR'].includes(userRole);
+    if (!isAdmin) {
+      throw new ForbiddenException(
+        'Solo un administrador puede cambiar este permiso',
+      );
+    }
+
+    const profile = await this.prisma.doctorProfile.findUnique({
+      where: { id: doctorProfileId },
+      select: {
+        id: true,
+        canManageOwnSchedule: true,
+        user: { select: { firstName: true, lastNamePaternal: true } },
+      },
+    });
+    if (!profile) throw new NotFoundException('Perfil médico no encontrado');
+
+    return this.prisma.doctorProfile.update({
+      where: { id: doctorProfileId },
+      data: { canManageOwnSchedule: !profile.canManageOwnSchedule },
+      select: {
+        id: true,
+        canManageOwnSchedule: true,
+        user: { select: { firstName: true, lastNamePaternal: true } },
+      },
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // TOGGLE disponibilidad del médico (botón pausa global)
+  // Solo el propio médico, ADMIN o MAIN_DOCTOR pueden hacerlo
+  // ─────────────────────────────────────────────────────────────
+
+  async toggleDoctorAvailability(
+    doctorProfileId: string,
+    requestingUserId: string,
+    userRole: string,
+  ) {
+    const profile = await this.prisma.doctorProfile.findUnique({
+      where: { id: doctorProfileId },
+      include: { user: true },
+    });
+    if (!profile) throw new NotFoundException('Perfil médico no encontrado');
+
+    const isOwn = profile.user.id === requestingUserId;
+    const isAdmin = ['ADMIN_SYSTEM', 'MAIN_DOCTOR'].includes(userRole);
+
+    if (!isOwn && !isAdmin) {
+      throw new ForbiddenException(
+        'No tienes permiso para modificar esta disponibilidad',
+      );
+    }
+
+    return this.prisma.doctorProfile.update({
+      where: { id: doctorProfileId },
+      data: { isAvailable: !profile.isAvailable },
+      select: {
+        id: true,
+        isAvailable: true,
+        user: { select: { firstName: true, lastNamePaternal: true } },
+      },
+    });
+  }
+
+  // ─── SIGNATURE UPLOAD ─────────────────────────────────────────────────────
+
+  async uploadSignature(
+    doctorProfileId: string,
+    buffer: Buffer<ArrayBufferLike>,
+    requestingUserId: string,
+    userRole: string,
+  ): Promise<{ signatureUrl: string }> {
+    const profile = await this.prisma.doctorProfile.findUnique({
+      where: { id: doctorProfileId },
+      select: { id: true, userId: true, signaturePublicId: true },
+    });
+    if (!profile) throw new NotFoundException('Perfil médico no encontrado');
+
+    const isOwn = profile.userId === requestingUserId;
+    const isAdmin = ['ADMIN_SYSTEM', 'MAIN_DOCTOR'].includes(userRole);
+    if (!isOwn && !isAdmin)
+      throw new ForbiddenException('Sin permiso para subir firma');
+
+    if (profile.signaturePublicId) {
+      await this.cloudinary.deleteByPublicId(profile.signaturePublicId);
+    }
+
+    const publicId = this.cloudinary.buildPublicId(
+      'medisys/doctors/signatures',
+      doctorProfileId,
+    );
+    const result = await this.cloudinary.uploadStream(
+      buffer,
+      'medisys/doctors/signatures',
+      publicId,
+    );
+
+    await this.prisma.doctorProfile.update({
+      where: { id: doctorProfileId },
+      data: {
+        signatureUrl: result.secure_url,
+        signaturePublicId: result.public_id,
+      },
+    });
+
+    return { signatureUrl: result.secure_url };
+  }
+
   // ─────────────────────────────────────────────────────────────
   // HELPER PRIVADO: Validar que todos los clinicIds existen y están activos
   // Se usa en createFull y assignProfile para fallar temprano
@@ -237,41 +386,5 @@ export class DoctorsService {
         `Los siguientes consultorios no existen o están inactivos: ${invalidIds.join(', ')}`,
       );
     }
-  }
-
-  // ─────────────────────────────────────────────────────────────
-  // TOGGLE disponibilidad del médico (botón pausa global)
-  // Solo el propio médico, ADMIN o MAIN_DOCTOR pueden hacerlo
-  // ─────────────────────────────────────────────────────────────
-  async toggleDoctorAvailability(
-    doctorProfileId: string,
-    requestingUserId: string,
-    userRole: string,
-  ) {
-    const profile = await this.prisma.doctorProfile.findUnique({
-      where: { id: doctorProfileId },
-      include: { user: true },
-    });
-
-    if (!profile) throw new NotFoundException('Perfil médico no encontrado');
-
-    const isOwn = profile.user.id === requestingUserId;
-    const isAdmin = ['ADMIN_SYSTEM', 'MAIN_DOCTOR'].includes(userRole);
-
-    if (!isOwn && !isAdmin) {
-      throw new ForbiddenException(
-        'No tienes permiso para modificar esta disponibilidad',
-      );
-    }
-
-    return this.prisma.doctorProfile.update({
-      where: { id: doctorProfileId },
-      data: { isAvailable: !profile.isAvailable },
-      select: {
-        id: true,
-        isAvailable: true,
-        user: { select: { firstName: true, lastNamePaternal: true } },
-      },
-    });
   }
 }

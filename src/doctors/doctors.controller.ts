@@ -7,7 +7,9 @@ import {
   Patch,
   Post,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@auth/guards/jwt-auth.guard';
@@ -17,6 +19,7 @@ import { DoctorsService } from './doctors.service';
 import { CreateDoctorDTO } from './dto/create-doctor.dto';
 import { AssignDoctorProfileDTO } from './dto/assign-doctor-profile.dto';
 import { RequestWithUser } from '@auth/auth.controller';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 // Agrupa los endpoints en Swagger bajo "Doctors", no afecta la logica
 @ApiTags('Doctors')
@@ -92,6 +95,47 @@ export class DoctorsController {
   ) {
     return this.doctorsService.toggleDoctorAvailability(
       doctorProfileId,
+      req.user.id,
+      req.user.role,
+    );
+  }
+
+  // PATCH /api/doctors/:doctorProfileId/schedule-permission
+  @Patch(':doctorProfileId/schedule-permission')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR')
+  toggleSchedulePermission(
+    @Param('doctorProfileId', ParseUUIDPipe) doctorProfileId: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.doctorsService.toggleSchedulePermission(
+      doctorProfileId,
+      req.user.role,
+    );
+  }
+
+  // POST /api/doctors/:doctorProfileId/signature
+  @Post(':doctorProfileId/signature')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 3 * 1024 * 1024 }, // 3 MB
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+          cb(new Error('Solo se permiten imágenes'), false);
+        } else {
+          cb(null, true);
+        }
+      },
+    }),
+  )
+  uploadSignature(
+    @Param('doctorProfileId', ParseUUIDPipe) doctorProfileId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.doctorsService.uploadSignature(
+      doctorProfileId,
+      file.buffer,
       req.user.id,
       req.user.role,
     );

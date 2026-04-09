@@ -5,14 +5,20 @@ import {
   Controller,
   Get,
   Param,
+  ParseFilePipe,
   ParseUUIDPipe,
+  Patch,
   Post,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
 import { Roles } from '@auth/decorators/roles.decorator';
 import { CreateUserDTO } from './dto/create-user.dto';
+import { UpdateUserDTO } from './dto/update-user.dto';
 import { RequestWithUser } from '@auth/auth.controller';
 
 @Controller('users')
@@ -50,5 +56,40 @@ export class UsersController {
   @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR', 'RECEPTIONIST', 'PATIENT')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.findOne(id);
+  }
+
+  // PATCH /api/users/:id
+  @Patch(':id')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR')
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserDTO) {
+    return this.usersService.update(id, dto);
+  }
+
+  // POST /api/users/:id/photo
+  // multipart/form-data — field name: "file"
+  @Post(':id/photo')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+          cb(new Error('Solo se permiten imágenes'), false);
+        } else {
+          cb(null, true);
+        }
+      },
+    }),
+  )
+  uploadPhoto(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: true,
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    return this.usersService.uploadPhoto(id, file.buffer);
   }
 }

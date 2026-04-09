@@ -7,10 +7,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { CreateUserDTO } from '@users/dto/create-user.dto';
 import { Role } from '@generated/prisma/enums';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { USER_SELECT } from './constants/user.select';
+import { UpdateUserDTO } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cloudinary: CloudinaryService,
+  ) {}
 
   // Busca un usuario por email — usado internamente por AuthService
   async findByEmail(email: string) {
@@ -38,15 +44,7 @@ export class UsersService {
         lastNameMaternal: dto.lastNameMaternal,
         role: dto.role,
       },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastNamePaternal: true,
-        role: true,
-        isActive: true,
-        createdAt: true,
-      },
+      select: USER_SELECT,
     });
   }
 
@@ -61,16 +59,7 @@ export class UsersService {
         role: { in: [Role.ADMIN_SYSTEM, Role.RECEPTIONIST] },
         ...(hasFullAccess ? {} : { isActive: true }),
       },
-      select: {
-        id: true,
-        firstName: true,
-        middleName: true, // Añadido (es opcional en tu prisma)
-        lastNamePaternal: true, // <--- Nombre correcto
-        lastNameMaternal: true, // <--- Nombre correcto
-        email: true,
-        role: true,
-        isActive: true,
-      },
+      select: USER_SELECT,
       orderBy: {
         createdAt: 'desc',
       },
@@ -81,17 +70,68 @@ export class UsersService {
   // BUSCAR un usuario (no doctor) por su userId
   // ─────────────────────────────────────────────────────────────
   async findOne(userId: string) {
-    const doctor = await this.prisma.user.findFirst({
+    const user = await this.prisma.user.findFirst({
       where: {
         id: userId,
         role: { in: [Role.ADMIN_SYSTEM, Role.RECEPTIONIST] },
         doctorProfile: { is: null },
       },
+      select: USER_SELECT,
     });
 
-    if (!doctor) {
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    return user;
+  }
+
+  // ─── UPDATE ───────────────────────────────────────────────────────────────
+
+  async update(userId: string, dto: UpdateUserDTO) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: dto,
+      select: USER_SELECT,
+    });
+  }
+  // ─── PHOTO UPLOAD ─────────────────────────────────────────────────────────
+
+  async uploadPhoto(
+    userId: string,
+    buffer: Buffer<ArrayBufferLike>,
+  ): Promise<{ photoUrl: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
       throw new NotFoundException('Usuario no encontrado');
     }
-    return doctor;
+
+    const publicId = this.cloudinary.buildPublicId(
+      'medisys/doctors/photos',
+      userId,
+    );
+
+    const result = await this.cloudinary.uploadStream(
+      buffer,
+      'medisys/doctors/photos',
+      publicId,
+    );
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        photoUrl: result.secure_url,
+        photoPublicId: result.public_id,
+      },
+    });
+
+    return { photoUrl: result.secure_url };
   }
 }

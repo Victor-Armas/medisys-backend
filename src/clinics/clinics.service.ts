@@ -10,14 +10,22 @@ import { CreateClinicDTO } from './dto/create-clinic.dto';
 import { UpdateClinicDTO } from './dto/update-clinic.dto';
 import { CreateScheduleRangeDTO } from './dto/create-schedule-range.dto';
 import { CreateScheduleOverrideDTO } from './dto/create-schedule-override.dto';
-import { CLINIC_SELECT } from './constants/clinic.select';
+import {
+  CLINIC_SELECT,
+  DOCTOR_IN_CLINIC_SELECT,
+} from './constants/clinic.select';
 import { GetAvailabilityDto } from './dto/get-availability.dto';
 import { UpdateScheduleRangeDTO } from './dto/update-schedule-range.dto';
 import { UpdateScheduleOverrideDTO } from './dto/update-schedule-override.dto';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { AssignDoctorToClinicDTO } from './dto/assign-doctor-clinic.dto';
 
 @Injectable()
 export class ClinicsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cloudinary: CloudinaryService,
+  ) {}
 
   // ─────────────────────────────────────────────────────────────
   // CREAR consultorio
@@ -46,16 +54,60 @@ export class ClinicsService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LISTAR todos los consultorios
-  // ADMIN/MAIN_DOCTOR ven todos incluidos inactivos
-  // Otros roles solo ven activos
+  // LISTAR consultorios (Vista Administrativa/Gestión)
+  // ADMIN/MAIN_DOCTOR: ven todos (incluidos inactivos)
+  // DOCTOR: solo ve sus clínicas asignadas (activas)
   // ─────────────────────────────────────────────────────────────
-  async findAll(userRole: string) {
+  async findAll(userRole: string, userId: string) {
     const hasFullAccess = ['ADMIN_SYSTEM', 'MAIN_DOCTOR'].includes(userRole);
 
+    // Si es Admin o Main, no aplicamos filtros de relación
+    if (hasFullAccess) {
+      return this.prisma.clinic.findMany({
+        select: CLINIC_SELECT,
+        orderBy: { name: 'asc' },
+      });
+    }
+
+    // Si es DOCTOR, filtramos por sus asignaciones en doctorClinics
+    if (userRole === 'DOCTOR' && userId) {
+      return this.prisma.clinic.findMany({
+        where: {
+          isActive: true,
+          doctorClinics: {
+            some: {
+              doctorProfile: {
+                userId: userId,
+              },
+              isActive: true, // Solo clínicas donde su relación esté activa
+            },
+          },
+        },
+        select: CLINIC_SELECT,
+        orderBy: { name: 'asc' },
+      });
+    }
+
+    // Cualquier otro rol (Receptionist, Patient, etc.) en la vista de gestión no ve nada
+    return [];
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // LISTAR consultorios para agendamiento (Público)
+  // Todos los roles ven todas las clínicas activas
+  // ─────────────────────────────────────────────────────────────
+  async findAllPublic() {
     return this.prisma.clinic.findMany({
-      where: hasFullAccess ? {} : { isActive: true },
-      select: CLINIC_SELECT,
+      where: { isActive: true },
+      // Aquí podrías usar un SELECT más ligero si no necesitas toda la info
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        city: true,
+        brandColor: true,
+        logoUrl: true,
+      },
       orderBy: { name: 'asc' },
     });
   }
@@ -631,6 +683,107 @@ export class ClinicsService {
         endTime,
         note: dto.note,
       },
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Establecer Logo para la clinica
+  // ─────────────────────────────────────────────────────────────
+  async uploadLogo(
+    clinicId: string,
+    buffer: Buffer,
+  ): Promise<{ logoUrl: string }> {
+    const clinic = await this.prisma.clinic.findUnique({
+      where: { id: clinicId },
+      select: { id: true, logoPublicId: true },
+    });
+    if (!clinic) throw new NotFoundException('Consultorio no encontrado');
+
+    if (clinic.logoPublicId) {
+      await this.cloudinary.deleteByPublicId(clinic.logoPublicId);
+    }
+
+    const publicId = this.cloudinary.buildPublicId(
+      'medisys/clinics/logos',
+      clinicId,
+    );
+    const result = await this.cloudinary.uploadStream(
+      buffer,
+      'medisys/clinics/logos',
+      publicId,
+    );
+
+    await this.prisma.clinic.update({
+      where: { id: clinicId },
+      data: { logoUrl: result.secure_url, logoPublicId: result.public_id },
+    });
+
+    return { logoUrl: result.secure_url };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // ASIGNAR DOCTOR A CONSULTORIO
+  // POST /api/clinics/:id/assign-doctor
+  // Solo ADMIN_SYSTEM y MAIN_DOCTOR
+  // ─────────────────────────────────────────────────────────────
+
+  async assignDoctor(clinicId: string, dto: AssignDoctorToClinicDTO) {
+    // 1. Verificar que la clínica existe
+    const clinic = await this.prisma.clinic.findUnique({
+      where: { id: clinicId },
+      select: { id: true, name: true, isActive: true },
+    });
+    if (!clinic) throw new NotFoundException('Consultorio no encontrado');
+    if (!clinic.isActive)
+      throw new BadRequestException('El consultorio está inactivo');
+
+    // 2. Verificar que el perfil médico existe
+    const doctorProfile = await this.prisma.doctorProfile.findUnique({
+      where: { id: dto.doctorProfileId },
+      select: { id: true },
+    });
+    if (!doctorProfile)
+      throw new NotFoundException('Perfil médico no encontrado');
+
+    // 3. Verificar que no esté ya asignado
+    const existing = await this.prisma.doctorClinic.findUnique({
+      where: {
+        doctorProfileId_clinicId: {
+          doctorProfileId: dto.doctorProfileId,
+          clinicId,
+        },
+      },
+    });
+
+    if (existing) {
+      // Si ya existe pero estaba inactivo, lo reactivamos
+      if (!existing.isActive) {
+        return this.prisma.doctorClinic.update({
+          where: { id: existing.id },
+          data: {
+            isActive: true,
+            isPrimary: dto.isPrimary ?? existing.isPrimary,
+          },
+          select: DOCTOR_IN_CLINIC_SELECT,
+        });
+      }
+      throw new ConflictException(
+        'El médico ya está asignado a este consultorio',
+      );
+    }
+
+    // 4. Validar capacidad
+    await this.validateClinicCapacity(clinicId);
+
+    // 5. Crear la asignación
+    return this.prisma.doctorClinic.create({
+      data: {
+        clinicId,
+        doctorProfileId: dto.doctorProfileId,
+        isPrimary: dto.isPrimary ?? false,
+        isActive: true,
+      },
+      select: DOCTOR_IN_CLINIC_SELECT,
     });
   }
 

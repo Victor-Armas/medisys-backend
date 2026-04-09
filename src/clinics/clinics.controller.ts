@@ -9,7 +9,9 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@auth/guards/jwt-auth.guard';
@@ -24,6 +26,8 @@ import { CreateScheduleOverrideDTO } from './dto/create-schedule-override.dto';
 import { GetAvailabilityDto } from './dto/get-availability.dto';
 import { UpdateScheduleRangeDTO } from './dto/update-schedule-range.dto';
 import { UpdateScheduleOverrideDTO } from './dto/update-schedule-override.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { AssignDoctorToClinicDTO } from './dto/assign-doctor-clinic.dto';
 
 @ApiTags('Clinics')
 @Controller('clinics')
@@ -38,11 +42,20 @@ export class ClinicsController {
     return this.clinicsService.create(dto);
   }
 
+  // GET /api/clinics/selector
+  // Este se usa para dropdowns, combos y procesos de agendamiento
+  @Get('public/list')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR', 'RECEPTIONIST', 'PATIENT')
+  findAllPublic() {
+    // Sin filtros de asignación para agendar citas
+    return this.clinicsService.findAllPublic();
+  }
+
   // GET /api/clinics
   @Get()
   @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR', 'RECEPTIONIST')
   findAll(@Req() req: RequestWithUser) {
-    return this.clinicsService.findAll(req.user.role);
+    return this.clinicsService.findAll(req.user.role, req.user.id);
   }
 
   // GET /api/clinics/:id
@@ -162,5 +175,37 @@ export class ClinicsController {
       req.user.id,
       req.user.role,
     );
+  }
+
+  // POST /api/clinics/:id/logo
+  @Post(':id/logo')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+          cb(new Error('Solo se permiten imágenes'), false);
+        } else {
+          cb(null, true);
+        }
+      },
+    }),
+  )
+  uploadLogo(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.clinicsService.uploadLogo(id, file.buffer);
+  }
+
+  // POST /api/clinics/:id/assign-doctor
+  @Post(':id/assign-doctor')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR')
+  assignDoctor(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AssignDoctorToClinicDTO,
+  ) {
+    return this.clinicsService.assignDoctor(id, dto);
   }
 }
