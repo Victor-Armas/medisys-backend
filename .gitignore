@@ -56,3 +56,12 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# --- SEPOMEX ---
+# No queremos subir el archivo de 30MB al repo de código
+CPdescarga.txt
+../../CPdescarga.txt
+../CPdescarga.txt
+
+prisma/seed.ts
+prisma/seed-sepomex.ts
