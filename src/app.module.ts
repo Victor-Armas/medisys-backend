@@ -7,17 +7,45 @@ import { PatientsModule } from './patients/patients.module';
 import { ClinicsModule } from './clinics/clinics.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { UsersModule } from '@users/users.module';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { PatientAuthModule } from './patient-auth/patient-auth.module';
+import { SepomexModule } from './sepomex/sepomex.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+
+    // Rate limiting global — protege todos los endpoints.
+    // Los endpoints críticos (auth) sobrescriben con @Throttle() propio.
+    // default: 60 requests / 60 segundos por IP
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000, // 60 segundos
+        limit: 60,
+      },
+    ]),
     PrismaModule, // @Global() — PrismaService disponible en toda la app
-    CloudinaryModule,
-    UsersModule,
+    CloudinaryModule, // @Global
+
+    // ── Fase 1 ────────────────────────────────────────────────
+
     AuthModule,
+    UsersModule,
     ClinicsModule,
     DoctorsModule,
+
+    // ── Fase 2 ────────────────────────────────────────────────
     PatientsModule,
+    PatientAuthModule,
+    SepomexModule,
+  ],
+  providers: [
+    // Aplica ThrottlerGuard a TODOS los endpoints de la app
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

@@ -12,6 +12,10 @@ datasource db {
   provider = "postgresql"
 }
 
+// ============================================================
+// ENUMS — STAFF
+// ============================================================
+
 enum Role {
   ADMIN_SYSTEM   // Administrador del sistema — acceso total a todos los consultorios
   MAIN_DOCTOR    // Médico principal — acceso total dentro de su(s) consultorio(s)
@@ -27,32 +31,76 @@ enum ScheduleOverrideType {
 }
 
 // ============================================================
+// ENUMS — PATIENT (Fase 2)
+// ============================================================
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum BloodType {
+  O_POSITIVE
+  O_NEGATIVE
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  UNKNOWN
+}
+
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+  FREE_UNION
+  OTHER
+}
+
+enum EducationLevel {
+  NONE
+  PRIMARY
+  SECONDARY
+  HIGH_SCHOOL
+  TECHNICAL
+  BACHELOR
+  POSTGRADUATE
+}
+
+/// Hábito codificado para campos de antecedentes no patológicos.
+/// Permite estadísticas y búsquedas estructuradas vs texto libre.
+enum HabitStatus {
+  NEVER
+  FORMER    // Ex-consumidor
+  CURRENT
+  UNKNOWN
+}
+
+// ============================================================
 // USER — Usuario del sistema (staff: admin, médicos, recepcionistas)
 // ============================================================
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique               // Correo electrónico (usado para login)
-  password      String                         // Contraseña hasheada con bcrypt
-  firstName            String                              // Nombre
-  middleName           String?                             // Segundo Nombre Opcional
-  lastNamePaternal     String                              // Apellido paterno
-  lastNameMaternal     String                             // Apellido materno
-  role          Role     @default(RECEPTIONIST) // Rol en el sistema
-  photoUrl      String?                        // Foto de perfil en Cloudinary (opcional, solo médicos)
-  photoPublicId String?                        // public_id en Cloudinary para eliminación
-  phone         String?                        // Teléfono personal
-  isActive      Boolean  @default(true)       // Activo por defecto 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                    String   @id @default(uuid())
+  email                 String   @unique               // Correo electrónico (usado para login)
+  password              String                         // Contraseña hasheada con bcrypt
+  firstName             String                         // Nombre
+  middleName            String?                             // Segundo Nombre Opcional
+  lastNamePaternal      String                              // Apellido paterno
+  lastNameMaternal      String                             // Apellido materno
+  role                  Role     @default(RECEPTIONIST) // Rol en el sistema
+  photoUrl              String?                        // Foto de perfil en Cloudinary (opcional, solo médicos)
+  photoPublicId         String?                        // public_id en Cloudinary para eliminación
+  phone                 String?                        // Teléfono personal
+  isActive              Boolean  @default(true)       // Activo por defecto 
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  // Solo existe si el usuario es DOCTOR o MAIN_DOCTOR
-  doctorProfile DoctorProfile?
-
-  // Auditoría de acciones
-  // createdAppointments Appointment[]  @relation("AppointmentCreatedBy") // Citas que este usuario registró
-  // consultations       Consultation[] @relation("ConsultationDoctor")   // Consultas que realizó como médico
-  // prescriptions       Prescription[] @relation("PrescriptionDoctor")   // Recetas que emitió
+  doctorProfile DoctorProfile?                          // Solo existe si el usuario es DOCTOR o MAIN_DOCTOR
 }
 
 // ============================================================
@@ -122,8 +170,8 @@ model Clinic {
 
   // Relaciones
   doctorClinics  DoctorClinic[]                      // Médicos asignados a este consultorio
-  // appointments   Appointment[]                       // Citas agendadas en este consultorio
-  // patientClinics PatientClinic[]                     // Pacientes atendidos en este consultorio
+  patients      PatientClinic[]
+
 }
 
 // ============================================================
@@ -181,4 +229,231 @@ model DoctorClinic {
   scheduleOverrides ScheduleOverride[]
 
   @@unique([doctorProfileId, clinicId])
+}
+
+// ============================================================
+// PATIENT — Ficha del paciente (datos clínicos y personales)
+// ============================================================
+
+model Patient {
+  id               String         @id @default(uuid())
+
+  // Nombre estructurado (obligatorio para documentos legales y CURP)
+  firstName        String
+  middleName       String?
+  lastNamePaternal String
+  lastNameMaternal String?
+
+  // Datos demográficos
+  birthDate        DateTime
+  gender           Gender
+  curp             String?        @unique
+  phone            String?
+  email            String?
+  maritalStatus    MaritalStatus?
+  occupation       String?
+  educationLevel   EducationLevel?
+
+  // Dato clínico visible en cabecera del expediente
+  bloodType        BloodType?
+
+  // Contacto de emergencia
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  account        PatientAccount?
+  addresses      PatientAddress[]
+  medicalHistory MedicalHistory?
+  clinics        PatientClinic[]
+  // Fases siguientes:
+  // consultations Consultation[]
+  // prescriptions Prescription[]
+}
+
+// ============================================================
+// PATIENT ACCOUNT — Credenciales para portal del paciente
+// Separado de User (staff) por seguridad y arquitectura
+// JWT secret propio: JWT_PATIENT_SECRET
+// ============================================================
+
+model PatientAccount {
+  id        String   @id @default(uuid())
+  patientId String   @unique
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  // El email de login puede ser diferente al email de contacto del paciente
+  email     String   @unique
+  password  String   // bcrypt hash
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// PATIENT ADDRESS — Dirección normalizada
+// Mexico: usa catálogo SEPOMEX
+// Extranjero: campos manuales de fallback
+// ============================================================
+
+model PatientAddress {
+  id        String  @id @default(uuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  country   String  @default("MX")
+  isPrimary Boolean @default(false)
+
+  // ── México (SEPOMEX) ──────────────────────────────────────
+  postalCodeId   String?
+  postalCode     SepomexPostalCode? @relation(fields: [postalCodeId], references: [id])
+  neighborhoodId String?
+  neighborhood   SepomexNeighborhood? @relation(fields: [neighborhoodId], references: [id])
+  street         String?
+  extNumber      String?
+  intNumber      String?
+
+  // ── Extranjero (fallback manual) ──────────────────────────
+  foreignState       String?
+  foreignCity        String?
+  foreignPostalCode  String?
+  foreignAddressLine String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// PATIENT CLINIC — Relación paciente ↔ consultorio (M:N)
+// Permite historial por sede y crecimiento multi-tenant
+// ============================================================
+
+model PatientClinic {
+  id         String   @id @default(uuid())
+  patientId  String
+  clinicId   String
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  clinic     Clinic   @relation(fields: [clinicId], references: [id])
+  assignedAt DateTime @default(now())
+  isActive   Boolean  @default(true)
+
+  @@unique([patientId, clinicId])
+}
+
+// ============================================================
+// MEDICAL HISTORY — Historia clínica (1:1 con Patient)
+// Se crea ÚNICAMENTE en ConsultationType.FIRST_VISIT
+// NO se modifica después; las consultas posteriores crean Consultation
+// ============================================================
+
+model MedicalHistory {
+  id        String  @id @default(uuid())
+  patientId String  @unique
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  // ── Antecedentes patológicos ──────────────────────────────
+  diseases           String?   // Enfermedades previas (texto clínico)
+  surgeries          String?
+  hospitalizations   String?
+  bloodTransfusions  Boolean   @default(false)
+  traumaHistory      String?
+  currentMedications String?   // Lista de medicamentos actuales
+  allergies          String?   // Alergias conocidas
+
+  // ── Antecedentes no patológicos ───────────────────────────
+  smoking          HabitStatus  @default(UNKNOWN)
+  smokingDetail    String?       // Cantidad/años si CURRENT o FORMER
+  alcoholUse       HabitStatus  @default(UNKNOWN)
+  alcoholDetail    String?
+  drugUse          HabitStatus  @default(UNKNOWN)
+  drugDetail       String?
+  immunizations    String?
+  physicalActivity String?
+  pets             Boolean      @default(false)
+  tattoos          Boolean      @default(false)
+  woodSmokeExposure Boolean     @default(false)
+
+  // ── Antecedentes heredofamiliares ─────────────────────────
+  fatherHistory      String?
+  motherHistory      String?
+  childrenHistory    String?
+  siblingsHistory    String?
+  otherFamilyHistory String?
+
+  // ── Antecedentes gineco-obstétricos ───────────────────────
+  // Nullable — solo aplican según el paciente
+  menarche            Int?       // Edad de primera menstruación
+  menstrualCycle      String?    // Descripción del ciclo
+  lastMenstrualPeriod DateTime?
+  sexualActivityStart Int?       // Edad inicio actividad sexual
+  gestations          Int?
+  deliveries          Int?
+  abortions           Int?
+  caesareans          Int?
+  contraceptiveMethod String?
+  menopause           Boolean?
+  mammography         String?    // Fecha/resultado último estudio
+  cervicalCytology    String?    // Fecha/resultado último Papanicolau
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// SEPOMEX — Catálogo postal oficial de México
+// Fuente: Correos de México (sepomex.gob.mx)
+// Actualización: cada 6-12 meses (UPSERT only, never DELETE)
+// ============================================================
+
+model SepomexState {
+  id   String @id @default(uuid())
+  code String @unique  // c_estado (e.g. "01")
+  name String          // d_estado (e.g. "Aguascalientes")
+
+  municipalities SepomexMunicipality[]
+}
+
+model SepomexMunicipality {
+  id      String       @id @default(uuid())
+  code    String                        // c_mnpio (e.g. "001")
+  name    String                        // D_mnpio
+  stateId String
+  state   SepomexState @relation(fields: [stateId], references: [id])
+
+  postalCodes SepomexPostalCode[]
+
+  @@unique([code, stateId])
+}
+
+model SepomexPostalCode {
+  id             String              @id @default(uuid())
+  code           String                               // d_codigo (e.g. "64000")
+  municipalityId String
+  municipality   SepomexMunicipality @relation(fields: [municipalityId], references: [id])
+
+  neighborhoods    SepomexNeighborhood[]
+  patientAddresses PatientAddress[]
+
+  @@index([code])
+}
+
+model SepomexNeighborhood {
+  id           String            @id @default(uuid())
+  name         String                                // d_asenta
+  type         String                                // d_tipo_asenta (e.g. "Colonia")
+  zone         String?                               // d_zona (e.g. "Urbano")
+  postalCodeId String
+  postalCode   SepomexPostalCode @relation(fields: [postalCodeId], references: [id])
+
+  // id_asenta_cpcons del dataset — identifica unívocamente una colonia
+  // dentro de un CP para hacer UPSERT seguro en actualizaciones
+  sepomexId    String?  @unique
+
+  patientAddresses PatientAddress[]
 }
