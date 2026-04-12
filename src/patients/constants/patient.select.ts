@@ -20,7 +20,6 @@ export const ADDRESS_SELECT = {
     },
   },
   neighborhood: { select: { name: true, type: true } },
-  // Extranjero
   foreignState: true,
   foreignCity: true,
   foreignPostalCode: true,
@@ -69,7 +68,21 @@ export const MEDICAL_HISTORY_SELECT = {
   updatedAt: true,
 } as const;
 
-// ── Patient list select (ligero — para tablas y búsquedas) ────────────────────
+// ── Medical file select ───────────────────────────────────────────────────────
+export const MEDICAL_FILE_SELECT = {
+  id: true,
+  category: true,
+  description: true,
+  fileName: true,
+  fileUrl: true,
+  publicId: true,
+  mimeType: true,
+  fileSize: true,
+  uploadedById: true,
+  createdAt: true,
+} as const;
+
+// ── Patient list select (ligero — tablas y búsquedas) ─────────────────────────
 export const PATIENT_LIST_SELECT: Prisma.PatientSelect = {
   id: true,
   firstName: true,
@@ -90,7 +103,7 @@ export const PATIENT_LIST_SELECT: Prisma.PatientSelect = {
   },
 } as const;
 
-// ── Patient detail select (completo — para expediente) ────────────────────────
+// ── Patient detail select (completo — expediente) ─────────────────────────────
 export const PATIENT_DETAIL_SELECT: Prisma.PatientSelect = {
   ...PATIENT_LIST_SELECT,
   maritalStatus: true,

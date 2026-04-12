@@ -80,6 +80,18 @@ enum HabitStatus {
   UNKNOWN
 }
 
+/// Categoría del archivo médico adjunto al historial del paciente.
+enum MedicalFileCategory {
+  LAB_RESULTS    // Resultados de laboratorio (biometría, química sanguínea, etc.)
+  IMAGING        // Radiografías, ultrasonidos, TC, RM
+  PRESCRIPTION   // Recetas previas (de otros médicos o consultas anteriores)
+  REFERRAL       // Notas de interconsulta / referencias
+  SURGERY_REPORT // Informes quirúrgicos
+  PATHOLOGY      // Resultados de patología / biopsias
+  OTHER
+}
+
+
 // ============================================================
 // USER — Usuario del sistema (staff: admin, médicos, recepcionistas)
 // ============================================================
@@ -270,6 +282,7 @@ model Patient {
   account        PatientAccount?
   addresses      PatientAddress[]
   medicalHistory MedicalHistory?
+  medicalFiles   PatientMedicalFile[]
   clinics        PatientClinic[]
   // Fases siguientes:
   // consultations Consultation[]
@@ -404,6 +417,33 @@ model MedicalHistory {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// PATIENT MEDICAL FILE — Archivos del historial
+// PDFs e imágenes: estudios, radiografías, recetas externas, etc.
+// ============================================================
+
+model PatientMedicalFile {
+  id          String              @id @default(uuid())
+  patientId   String
+  patient     Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  category    MedicalFileCategory @default(OTHER)
+  description String?             // Texto libre: "Biometría hemática 12/04/2025"
+  fileName    String              // Nombre original del archivo
+  fileUrl     String              // URL pública de Cloudinary
+  publicId    String              // public_id en Cloudinary para eliminación
+  mimeType    String              // "application/pdf" | "image/jpeg" | "image/png"
+  fileSize    Int                 // Bytes
+
+  uploadedById String?            // userId del staff que subió el archivo (auditoría)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([patientId, category])
+  @@index([patientId, createdAt])
 }
 
 // ============================================================

@@ -78,7 +78,6 @@ export class PatientsController {
   }
 
   // ── POST /api/patients/:id/medical-history ─────────────────────────────────
-  // Solo en FIRST_VISIT — el médico llena la historia clínica completa
   @Post(':id/medical-history')
   @Roles(...DOCTORS)
   createMedicalHistory(
@@ -98,7 +97,7 @@ export class PatientsController {
   // ── PATCH /api/patients/:id/medical-history ───────────────────────────────
   // Solo admin/main pueden corregir una historia clínica ya creada
   @Patch(':id/medical-history')
-  @Roles(...ADMIN)
+  @Roles(...DOCTORS)
   updateMedicalHistory(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateMedicalHistoryDTO,

@@ -6,7 +6,8 @@ import { Readable } from 'stream';
 export type CloudinaryFolder =
   | 'medisys/doctors/photos'
   | 'medisys/doctors/signatures'
-  | 'medisys/clinics/logos';
+  | 'medisys/clinics/logos'
+  | 'medisys/patients/medical-files';
 
 @Injectable()
 export class CloudinaryService {
@@ -31,8 +32,9 @@ export class CloudinaryService {
           folder,
           public_id: publicId,
           overwrite: true,
-          resource_type: 'image',
-          // Strip metadata for privacy
+          // 'auto' detecta PDF vs imagen automáticamente.
+          // Con 'image' los PDFs son rechazados.
+          resource_type: 'auto',
           image_metadata: false,
         },
         (error, result) => {
