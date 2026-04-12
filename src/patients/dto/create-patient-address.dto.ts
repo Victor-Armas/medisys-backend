@@ -16,19 +16,19 @@ export class CreatePatientAddressDTO {
   @IsBoolean()
   isPrimary?: boolean;
 
-  // ── México ────────────────────────────────────────────────
+  // ── México ────────────────────────────────────────────────municipality
   // Tipamos 'o' y aseguramos retorno booleano
-  @ValidateIf((o: CreatePatientAddressDTO) => !o.country || o.country === 'MX')
+  @ValidateIf((o: CreatePatientAddressDTO) => !o.country || o.country === 'MX') //CP
   @IsOptional()
   @IsUUID()
   postalCodeId?: string;
 
-  @ValidateIf((o: CreatePatientAddressDTO) => !o.country || o.country === 'MX')
+  @ValidateIf((o: CreatePatientAddressDTO) => !o.country || o.country === 'MX') //Colonia
   @IsOptional()
   @IsUUID()
   neighborhoodId?: string;
 
-  @ValidateIf((o: CreatePatientAddressDTO) => !o.country || o.country === 'MX')
+  @ValidateIf((o: CreatePatientAddressDTO) => !o.country || o.country === 'MX') //Calle
   @IsOptional()
   @IsString()
   street?: string;
@@ -41,31 +41,35 @@ export class CreatePatientAddressDTO {
   @IsString()
   intNumber?: string;
 
+  @IsOptional() //estado
+  @IsString()
+  state?: string;
+
+  @IsOptional() //municipio
+  @IsString()
+  municipality?: string;
+
   // ── Extranjero ────────────────────────────────────────────
   // Usamos Boolean() para evitar que el `&&` retorne undefined (que ESLint lee como any)
   @ValidateIf((o: CreatePatientAddressDTO) =>
     Boolean(o.country && o.country !== 'MX'),
   )
-  @IsNotEmpty({
-    message: 'El estado es obligatorio para direcciones extranjeras',
-  })
+  @IsNotEmpty({ message: 'El estado es obligatorio para extranjeros' })
   @IsString()
-  foreignState?: string;
+  foreignState?: string; // Ejemplo: "TX" o "Texas"
 
   @ValidateIf((o: CreatePatientAddressDTO) =>
     Boolean(o.country && o.country !== 'MX'),
   )
-  @IsNotEmpty({
-    message: 'La ciudad es obligatoria para direcciones extranjeras',
-  })
+  @IsNotEmpty({ message: 'La ciudad es obligatoria para extranjeros' })
   @IsString()
-  foreignCity?: string;
+  foreignCity?: string; // Ejemplo: "Houston"
 
   @IsOptional()
   @IsString()
-  foreignPostalCode?: string;
+  foreignPostalCode?: string; // Ejemplo: "77001"
 
   @IsOptional()
   @IsString()
-  foreignAddressLine?: string;
+  foreignAddressLine?: string; // Aquí es donde pondrías la "Línea 2" (Apt, Suite, etc.)
 }

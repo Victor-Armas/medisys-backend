@@ -311,13 +311,14 @@ model PatientAddress {
   isPrimary Boolean @default(false)
 
   // ── México (SEPOMEX) ──────────────────────────────────────
-  postalCodeId   String?
+  postalCodeId   String? 
   postalCode     SepomexPostalCode? @relation(fields: [postalCodeId], references: [id])
-  neighborhoodId String?
+  neighborhoodId String? //colonia
   neighborhood   SepomexNeighborhood? @relation(fields: [neighborhoodId], references: [id])
-  street         String?
-  extNumber      String?
+  street         String? //calle
+  extNumber      String? 
   intNumber      String?
+
 
   // ── Extranjero (fallback manual) ──────────────────────────
   foreignState       String?
@@ -441,6 +442,7 @@ model SepomexPostalCode {
   patientAddresses PatientAddress[]
 
   @@index([code])
+  @@unique([code, municipalityId])
 }
 
 model SepomexNeighborhood {
@@ -453,7 +455,7 @@ model SepomexNeighborhood {
 
   // id_asenta_cpcons del dataset — identifica unívocamente una colonia
   // dentro de un CP para hacer UPSERT seguro en actualizaciones
-  sepomexId    String?  @unique
-
+  sepomexId    String?  
   patientAddresses PatientAddress[]
+  @@unique([postalCodeId, sepomexId])
 }

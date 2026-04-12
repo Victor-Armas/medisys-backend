@@ -256,29 +256,31 @@ export class SepomexService {
     rows: SepomexRow[],
     postalCodeMap: Map<string, string>,
   ): Promise<void> {
-    for (const row of rows) {
-      const pcKey = `${row.stateCode}-${row.municipalityCode}-${row.postalCode}`;
-      const postalCodeId = postalCodeMap.get(pcKey);
-      if (!postalCodeId) continue;
+    // Convertimos el batch de filas en data lista para Prisma
+    const data = rows
+      .map((row) => {
+        const pcKey = `${row.stateCode}-${row.municipalityCode}-${row.postalCode}`;
+        const postalCodeId = postalCodeMap.get(pcKey);
+        if (!postalCodeId || !row.sepomexId) return null;
 
-      if (row.sepomexId) {
-        await this.prisma.sepomexNeighborhood.upsert({
-          where: { sepomexId: row.sepomexId },
-          update: {
-            name: row.neighborhood,
-            type: row.neighborhoodType,
-            zone: row.zone || null,
-            postalCodeId,
-          },
-          create: {
-            name: row.neighborhood,
-            type: row.neighborhoodType,
-            zone: row.zone || null,
-            postalCodeId,
-            sepomexId: row.sepomexId,
-          },
-        });
-      }
-    }
+        return {
+          name: row.neighborhood,
+          type: row.neighborhoodType,
+          zone: row.zone || null,
+          postalCodeId,
+          sepomexId: row.sepomexId,
+        };
+      })
+      .filter((n): n is any => n !== null);
+
+    if (data.length === 0) return;
+
+    // REGLA DE ORO: En lugar de UPSERT (1x1), usamos createMany (Batch)
+    // skipDuplicates: true utiliza el ON CONFLICT DO NOTHING de Postgres
+    // Es órdenes de magnitud más rápido y no satura el Pool de conexiones
+    await this.prisma.sepomexNeighborhood.createMany({
+      data,
+      skipDuplicates: true,
+    });
   }
 }
