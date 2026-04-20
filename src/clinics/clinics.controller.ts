@@ -208,4 +208,15 @@ export class ClinicsController {
   ) {
     return this.clinicsService.assignDoctor(id, dto);
   }
+
+  /**
+   * Obtiene la lista de médicos que NO están asignados a una clínica específica.
+   * Endpoint: GET /clinics/:id/eligible-doctors
+   */
+  @Get(':id/eligible-doctors')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR') // Solo quienes pueden asignar deben ver esta lista
+  getEligibleDoctors(@Param('id', ParseUUIDPipe) id: string) {
+    // Delegamos la lógica de filtrado compleja al servicio
+    return this.clinicsService.getEligibleDoctors(id);
+  }
 }

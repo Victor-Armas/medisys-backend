@@ -91,6 +91,37 @@ enum MedicalFileCategory {
   OTHER
 }
 
+/// Distinguishes personal pathological conditions from family history.
+enum ConditionType {
+  PATHOLOGICAL /// Patient's own conditions
+  FAMILY       /// Heredofamilial history
+}
+
+/// Category within pathological antecedents (maps to Historia Clínica sections).
+enum ConditionCategory {
+  DISEASE        /// Enfermedades previas
+  SURGERY        /// Cirugías
+  HOSPITALIZATION /// Hospitalizaciones
+  TRAUMA         /// Traumatismos
+}
+
+/// Family member for heredofamilial entries.
+enum FamilyMember {
+  FATHER
+  MOTHER
+  SIBLINGS
+  CHILDREN
+  OTHER
+}
+
+/// Clinical severity of an allergic reaction.
+enum AllergySeverity {
+  MILD
+  MODERATE
+  SEVERE
+  UNKNOWN
+}
+
 
 // ============================================================
 // USER — Usuario del sistema (staff: admin, médicos, recepcionistas)
@@ -200,7 +231,7 @@ model ScheduleRange {
   endTime        String
   dateFrom        String
   dateTo          String
-  isActive       Boolean      @default(true)
+  isActive       Boolean    @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   @@index([doctorClinicId, dateFrom, dateTo])
@@ -284,6 +315,9 @@ model Patient {
   medicalHistory MedicalHistory?
   medicalFiles   PatientMedicalFile[]
   clinics        PatientClinic[]
+  conditions  PatientCondition[]
+  medications PatientMedication[]
+  allergies   PatientAllergy[]
   // Fases siguientes:
   // consultations Consultation[]
   // prescriptions Prescription[]
@@ -299,11 +333,8 @@ model PatientAccount {
   id        String   @id @default(uuid())
   patientId String   @unique
   patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-
-  // El email de login puede ser diferente al email de contacto del paciente
-  email     String   @unique
+  email     String   @unique // El email de login puede ser diferente al email de contacto del paciente
   password  String   // bcrypt hash
-
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -371,49 +402,36 @@ model MedicalHistory {
   patientId String  @unique
   patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
-  // ── Antecedentes patológicos ──────────────────────────────
-  diseases           String?   // Enfermedades previas (texto clínico)
-  surgeries          String?
-  hospitalizations   String?
-  bloodTransfusions  Boolean   @default(false)
-  traumaHistory      String?
-  currentMedications String?   // Lista de medicamentos actuales
-  allergies          String?   // Alergias conocidas
+  // ── Remaining pathological fact ───────────────────────────
+  /// Whether the patient has ever had blood transfusions.
+  bloodTransfusions Boolean @default(false)
 
-  // ── Antecedentes no patológicos ───────────────────────────
-  smoking          HabitStatus  @default(UNKNOWN)
-  smokingDetail    String?       // Cantidad/años si CURRENT o FORMER
-  alcoholUse       HabitStatus  @default(UNKNOWN)
+  // ── Non-pathological habits ───────────────────────────────
+  smoking          HabitStatus @default(UNKNOWN)
+  smokingDetail    String?
+  alcoholUse       HabitStatus @default(UNKNOWN)
   alcoholDetail    String?
-  drugUse          HabitStatus  @default(UNKNOWN)
+  drugUse          HabitStatus @default(UNKNOWN)
   drugDetail       String?
   immunizations    String?
   physicalActivity String?
-  pets             Boolean      @default(false)
-  tattoos          Boolean      @default(false)
-  woodSmokeExposure Boolean     @default(false)
+  pets             Boolean     @default(false)
+  tattoos          Boolean     @default(false)
+  woodSmokeExposure Boolean    @default(false)
 
-  // ── Antecedentes heredofamiliares ─────────────────────────
-  fatherHistory      String?
-  motherHistory      String?
-  childrenHistory    String?
-  siblingsHistory    String?
-  otherFamilyHistory String?
-
-  // ── Antecedentes gineco-obstétricos ───────────────────────
-  // Nullable — solo aplican según el paciente
-  menarche            Int?       // Edad de primera menstruación
-  menstrualCycle      String?    // Descripción del ciclo
+  // ── Gynecological / obstetric ─────────────────────────────
+  menarche            Int?
+  menstrualCycle      String?
   lastMenstrualPeriod DateTime?
-  sexualActivityStart Int?       // Edad inicio actividad sexual
+  sexualActivityStart Int?
   gestations          Int?
   deliveries          Int?
   abortions           Int?
   caesareans          Int?
   contraceptiveMethod String?
   menopause           Boolean?
-  mammography         String?    // Fecha/resultado último estudio
-  cervicalCytology    String?    // Fecha/resultado último Papanicolau
+  mammography         String?
+  cervicalCytology    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -444,6 +462,127 @@ model PatientMedicalFile {
 
   @@index([patientId, category])
   @@index([patientId, createdAt])
+}
+
+
+
+// ============================================================
+// ICD-10 LOCAL CATALOG
+// Source: CMS.gov ICD-10-CM files (updated annually, Oct)
+// Import via POST /medical-catalog/icd10/import (admin only)
+// ============================================================
+
+model Icd10Code {
+  id          String  @id @default(uuid())
+  /// e.g. "E11"
+  code        String  @unique
+  /// e.g. "Diabetes mellitus tipo 2"
+  description String
+  /// System grouping (e.g. "Endocrine", "Cardiovascular")
+  category    String?
+  /// Tracks popularity for ranking search results
+  searchCount Int     @default(0)
+  isActive    Boolean @default(true)
+
+  @@index([code])
+  @@index([description])
+}
+
+// ============================================================
+// MEDICATION CATALOG (curated: IMSS/COFEPRIS generic list)
+// Allows free-text fallback flagged as non-coded.
+// CNIS = catálogo de presentaciones farmacéuticas
+// ============================================================
+
+model MedicationCatalog {
+  id          String  @id @default(uuid())
+  /// Generic name (e.g. "Metformina")
+  name        String  
+  description String? // Aquí la descripción (ej: TABLETA 500 MG) 
+  /// RxNorm code if available (optional)
+  rxnormCode  String?
+  searchCount Int     @default(0)
+  isActive    Boolean @default(true)
+
+  medications PatientMedication[]
+
+  @@index([name])
+}
+
+// ============================================================
+// PATIENT CONDITION
+// Replaces: diseases, surgeries, hospitalizations, traumaHistory (string)
+// Also replaces: fatherHistory, motherHistory, etc. (via type=FAMILY)
+// ============================================================
+
+model PatientCondition {
+  id        String @id @default(uuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  /// ICD-10 code (nullable: allows free-text entry)
+  icd10Code   String?
+  /// Human-readable name (always required; sourced from ICD-10 or free text)
+  description String
+  category    ConditionCategory
+  type        ConditionType     @default(PATHOLOGICAL)
+  /// Only set when type = FAMILY
+  familyMember FamilyMember?
+  /// Free-text clinical context (e.g. "20 años de evolución")
+  notes       String?
+  /// true when no ICD-10 match was found; flagged for later review
+  isNonCoded  Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([patientId, category])
+  @@index([patientId, type])
+}
+
+// ============================================================
+// PATIENT MEDICATION
+// Replaces: currentMedications (string)
+// ============================================================
+
+model PatientMedication {
+  id        String @id @default(uuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  /// FK to catalog (null when isNonCoded = true)
+  catalogId  String?
+  catalog    MedicationCatalog? @relation(fields: [catalogId], references: [id])
+  /// Always stored to survive catalog changes
+  name       String
+  dose       String?
+  frequency  String?
+  isNonCoded Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([patientId])
+}
+
+// ============================================================
+// PATIENT ALLERGY
+// Replaces: allergies (string)
+// ============================================================
+
+model PatientAllergy {
+  id        String  @id @default(uuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  substance String
+  reaction  String?
+  severity  AllergySeverity @default(UNKNOWN)
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([patientId])
 }
 
 // ============================================================

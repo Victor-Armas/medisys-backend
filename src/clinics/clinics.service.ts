@@ -722,6 +722,57 @@ export class ClinicsService {
   }
 
   // ─────────────────────────────────────────────────────────────
+  // Lista de doctores para asignar consultorio (siempre que ya no este ya asignado en ese consultorio)
+  // GET /api/clinics/Doctor
+  // Solo ADMIN_SYSTEM y MAIN_DOCTOR
+  // ─────────────────────────────────────────────────────────────
+
+  async getEligibleDoctors(clinicId: string) {
+    //Validar que la clinica exista
+
+    const clinicExists = await this.prisma.clinic.findUnique({
+      where: { id: clinicId },
+      select: { id: true },
+    });
+    if (!clinicExists) {
+      throw new NotFoundException('Consultorio no encontrado');
+    }
+
+    return this.prisma.user.findMany({
+      where: {
+        //que sean doctores
+        role: { in: ['DOCTOR', 'MAIN_DOCTOR'] },
+        //que esten activos
+        isActive: true,
+        //que tengan perfil medico
+        doctorProfile: {
+          is: {
+            doctorClinics: {
+              none: {
+                clinicId: clinicId,
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastNamePaternal: true,
+        email: true,
+        role: true,
+        doctorProfile: {
+          select: {
+            id: true,
+            specialty: true,
+          },
+        },
+      },
+      orderBy: { firstName: 'asc' },
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // ASIGNAR DOCTOR A CONSULTORIO
   // POST /api/clinics/:id/assign-doctor
   // Solo ADMIN_SYSTEM y MAIN_DOCTOR

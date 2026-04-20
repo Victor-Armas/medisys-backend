@@ -11,6 +11,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { PatientAuthModule } from './patient-auth/patient-auth.module';
 import { SepomexModule } from './sepomex/sepomex.module';
+import { MedicalCatalogModule } from './medical-catalog/medical-catalog.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { SepomexModule } from './sepomex/sepomex.module';
     PatientsModule,
     PatientAuthModule,
     SepomexModule,
+    MedicalCatalogModule,
   ],
   providers: [
     // Aplica ThrottlerGuard a TODOS los endpoints de la app

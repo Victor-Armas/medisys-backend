@@ -5,22 +5,27 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  Max,
   Min,
 } from 'class-validator';
 import { HabitStatus } from '@generated/prisma/enums';
 
+/**
+ * DTO for creating/updating MedicalHistory.
+ *
+ * Note: pathological antecedents (diseases, surgeries, hospitalizations,
+ * traumatismos, currentMedications, allergies, heredofamiliares) have been
+ * migrated to structured models:
+ *   - PatientCondition  (POST /patients/:id/conditions)
+ *   - PatientMedication (POST /patients/:id/medications)
+ *   - PatientAllergy    (POST /patients/:id/allergies)
+ *
+ * This DTO now covers only: habits and gynecological antecedents.
+ */
 export class CreateMedicalHistoryDTO {
-  // ── Antecedentes patológicos ──────────────────────────────
-  @IsOptional() @IsString() diseases?: string;
-  @IsOptional() @IsString() surgeries?: string;
-  @IsOptional() @IsString() hospitalizations?: string;
+  // ── Remaining pathological fact ───────────────────────────
   @IsOptional() @IsBoolean() bloodTransfusions?: boolean;
-  @IsOptional() @IsString() traumaHistory?: string;
-  @IsOptional() @IsString() currentMedications?: string;
-  @IsOptional() @IsString() allergies?: string;
 
-  // ── Antecedentes no patológicos ───────────────────────────
+  // ── Non-pathological habits ───────────────────────────────
   @IsOptional() @IsEnum(HabitStatus) smoking?: HabitStatus;
   @IsOptional() @IsString() smokingDetail?: string;
   @IsOptional() @IsEnum(HabitStatus) alcoholUse?: HabitStatus;
@@ -33,18 +38,11 @@ export class CreateMedicalHistoryDTO {
   @IsOptional() @IsBoolean() tattoos?: boolean;
   @IsOptional() @IsBoolean() woodSmokeExposure?: boolean;
 
-  // ── Heredofamiliares ──────────────────────────────────────
-  @IsOptional() @IsString() fatherHistory?: string;
-  @IsOptional() @IsString() motherHistory?: string;
-  @IsOptional() @IsString() childrenHistory?: string;
-  @IsOptional() @IsString() siblingsHistory?: string;
-  @IsOptional() @IsString() otherFamilyHistory?: string;
-
-  // ── Gineco-obstétricos ────────────────────────────────────
-  @IsOptional() @IsInt() @Min(8) @Max(20) menarche?: number;
+  // ── Gynecological / obstetric ─────────────────────────────
+  @IsOptional() @IsInt() @Min(0) menarche?: number;
   @IsOptional() @IsString() menstrualCycle?: string;
   @IsOptional() @IsDateString() lastMenstrualPeriod?: string;
-  @IsOptional() @IsInt() @Min(10) @Max(25) sexualActivityStart?: number;
+  @IsOptional() @IsInt() @Min(0) sexualActivityStart?: number;
   @IsOptional() @IsInt() @Min(0) gestations?: number;
   @IsOptional() @IsInt() @Min(0) deliveries?: number;
   @IsOptional() @IsInt() @Min(0) abortions?: number;

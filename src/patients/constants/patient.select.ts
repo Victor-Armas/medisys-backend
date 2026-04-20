@@ -1,3 +1,4 @@
+// src/patients/constants/patient.select.ts
 import { Prisma } from '@generated/prisma/client';
 
 // ── Address select ────────────────────────────────────────────────────────────
@@ -26,16 +27,12 @@ export const ADDRESS_SELECT = {
   foreignAddressLine: true,
 } as const;
 
-// ── Medical history select ────────────────────────────────────────────────────
+// ── Medical history select (habits + gynecological only) ──────────────────────
 export const MEDICAL_HISTORY_SELECT = {
   id: true,
-  diseases: true,
-  surgeries: true,
-  hospitalizations: true,
+  // Remaining pathological fact
   bloodTransfusions: true,
-  traumaHistory: true,
-  currentMedications: true,
-  allergies: true,
+  // Non-pathological habits
   smoking: true,
   smokingDetail: true,
   alcoholUse: true,
@@ -47,11 +44,7 @@ export const MEDICAL_HISTORY_SELECT = {
   pets: true,
   tattoos: true,
   woodSmokeExposure: true,
-  fatherHistory: true,
-  motherHistory: true,
-  childrenHistory: true,
-  siblingsHistory: true,
-  otherFamilyHistory: true,
+  // Gynecological
   menarche: true,
   menstrualCycle: true,
   lastMenstrualPeriod: true,
@@ -68,6 +61,39 @@ export const MEDICAL_HISTORY_SELECT = {
   updatedAt: true,
 } as const;
 
+// ── Condition select ──────────────────────────────────────────────────────────
+export const CONDITION_SELECT = {
+  id: true,
+  icd10Code: true,
+  description: true,
+  category: true,
+  type: true,
+  familyMember: true,
+  notes: true,
+  isNonCoded: true,
+  createdAt: true,
+} as const;
+
+// ── Medication select ─────────────────────────────────────────────────────────
+export const MEDICATION_SELECT = {
+  id: true,
+  name: true,
+  dose: true,
+  frequency: true,
+  isNonCoded: true,
+  catalogId: true,
+  createdAt: true,
+} as const;
+
+// ── Allergy select ────────────────────────────────────────────────────────────
+export const ALLERGY_SELECT = {
+  id: true,
+  substance: true,
+  reaction: true,
+  severity: true,
+  createdAt: true,
+} as const;
+
 // ── Medical file select ───────────────────────────────────────────────────────
 export const MEDICAL_FILE_SELECT = {
   id: true,
@@ -82,7 +108,7 @@ export const MEDICAL_FILE_SELECT = {
   createdAt: true,
 } as const;
 
-// ── Patient list select (ligero — tablas y búsquedas) ─────────────────────────
+// ── Patient list select (lightweight — tables, search) ────────────────────────
 export const PATIENT_LIST_SELECT: Prisma.PatientSelect = {
   id: true,
   firstName: true,
@@ -103,7 +129,7 @@ export const PATIENT_LIST_SELECT: Prisma.PatientSelect = {
   },
 } as const;
 
-// ── Patient detail select (completo — expediente) ─────────────────────────────
+// ── Patient detail select (full — clinical record) ────────────────────────────
 export const PATIENT_DETAIL_SELECT: Prisma.PatientSelect = {
   ...PATIENT_LIST_SELECT,
   maritalStatus: true,
@@ -114,4 +140,19 @@ export const PATIENT_DETAIL_SELECT: Prisma.PatientSelect = {
   emergencyContactRelation: true,
   addresses: { select: ADDRESS_SELECT },
   medicalHistory: { select: MEDICAL_HISTORY_SELECT },
+  conditions: {
+    where: { isActive: true },
+    select: CONDITION_SELECT,
+    orderBy: [{ type: 'asc' }, { category: 'asc' }, { createdAt: 'asc' }],
+  },
+  medications: {
+    where: { isActive: true },
+    select: MEDICATION_SELECT,
+    orderBy: { createdAt: 'asc' },
+  },
+  allergies: {
+    where: { isActive: true },
+    select: ALLERGY_SELECT,
+    orderBy: [{ severity: 'desc' }, { createdAt: 'asc' }],
+  },
 } as const;
