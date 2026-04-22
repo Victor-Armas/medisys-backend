@@ -21,6 +21,7 @@ export const SCHEDULE_OVERRIDE_SELECT: Prisma.ScheduleOverrideSelect = {
 
 export const DOCTOR_IN_CLINIC_SELECT: Prisma.DoctorClinicSelect = {
   id: true,
+  clinicId: true,
   isPrimary: true,
   isActive: true,
   assignedAt: true,
@@ -67,5 +68,8 @@ export const CLINIC_SELECT: Prisma.ClinicSelect = {
   maxDoctors: true,
   isActive: true,
   createdAt: true,
-  doctorClinics: { select: DOCTOR_IN_CLINIC_SELECT },
+  doctorClinics: {
+    where: { isActive: true },
+    select: DOCTOR_IN_CLINIC_SELECT,
+  },
 } as const;

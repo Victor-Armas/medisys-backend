@@ -209,6 +209,16 @@ export class ClinicsController {
     return this.clinicsService.assignDoctor(id, dto);
   }
 
+  // PATCH /api/clinics/:id/doctors/:doctorProfileId/deactivate
+  @Patch(':id/doctors/:doctorProfileId/deactivate')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR')
+  deactivateDoctor(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('doctorProfileId', ParseUUIDPipe) doctorProfileId: string,
+  ) {
+    return this.clinicsService.deactivateDoctor(id, doctorProfileId);
+  }
+
   /**
    * Obtiene la lista de médicos que NO están asignados a una clínica específica.
    * Endpoint: GET /clinics/:id/eligible-doctors

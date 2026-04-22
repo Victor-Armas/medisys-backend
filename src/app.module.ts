@@ -12,6 +12,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { PatientAuthModule } from './patient-auth/patient-auth.module';
 import { SepomexModule } from './sepomex/sepomex.module';
 import { MedicalCatalogModule } from './medical-catalog/medical-catalog.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { AppointmentsModule } from './appointments/appointments.module';
 
 @Module({
   imports: [
@@ -41,6 +43,10 @@ import { MedicalCatalogModule } from './medical-catalog/medical-catalog.module';
     PatientAuthModule,
     SepomexModule,
     MedicalCatalogModule,
+
+    //── Fase 3 ────────────────────────────────────────────────
+    AppointmentsModule,
+    WhatsappModule,
   ],
   providers: [
     // Aplica ThrottlerGuard a TODOS los endpoints de la app

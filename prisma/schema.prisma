@@ -122,6 +122,31 @@ enum AllergySeverity {
   UNKNOWN
 }
 
+// ============================================================
+// APPOINTMENT — Gestión de Citas (Fase 3)
+// ============================================================
+
+enum AppointmentType {
+  IN_PERSON
+  HOME_VISIT
+  VIRTUAL
+}
+
+enum AppointmentStatus {
+  PENDING        // Agendada vía WhatsApp/Portal, pendiente de confirmar por staff
+  CONFIRMED      // Confirmada por el consultorio
+  IN_PROGRESS
+  COMPLETED      // El paciente ya fue atendido
+  CANCELLED      // Cancelada por el paciente o el médico
+  NO_SHOW        // El paciente no llegó
+}
+
+enum BookingSource {
+  STAFF       // Creada desde el panel admin
+  WHATSAPP    // Creada via WhatsApp Flow
+  PORTAL      // Creada desde el portal web del paciente
+  PHONE       // Registrada manualmente por recepción
+}
 
 // ============================================================
 // USER — Usuario del sistema (staff: admin, médicos, recepcionistas)
@@ -270,6 +295,7 @@ model DoctorClinic {
 
   scheduleRanges ScheduleRange[]
   scheduleOverrides ScheduleOverride[]
+  appointments Appointment[]
 
   @@unique([doctorProfileId, clinicId])
 }
@@ -318,6 +344,7 @@ model Patient {
   conditions  PatientCondition[]
   medications PatientMedication[]
   allergies   PatientAllergy[]
+  appointments Appointment[]
   // Fases siguientes:
   // consultations Consultation[]
   // prescriptions Prescription[]
@@ -637,4 +664,58 @@ model SepomexNeighborhood {
   sepomexId    String?  
   patientAddresses PatientAddress[]
   @@unique([postalCodeId, sepomexId])
+}
+
+
+// ============================================================
+// APPOINTMENT — Gestión de Citas (Fase 3)
+// ============================================================
+
+
+model Appointment {
+  id             String            @id @default(uuid())
+
+  // Paciente — null si es guest (agendó sin cuenta)
+  patientId      String?
+  patient        Patient?          @relation(fields: [patientId], references: [id])
+
+  // Guest info — usado cuando patientId es null
+  guestName      String?
+  guestPhone     String?
+  guestEmail     String?
+
+
+  // Médico + consultorio (ya tienes DoctorClinic)
+  doctorClinicId String
+  doctorClinic   DoctorClinic      @relation(fields: [doctorClinicId], references: [id])
+
+  // Tiempos en DateTime (UTC)
+  // No usamos "date: String" porque startTime ya incluye la fecha.
+  // Evitamos redundancia y posibles errores de sincronización.
+  startTime      DateTime
+  endTime        DateTime
+  
+  // Tipo y estado
+  type           AppointmentType   @default(IN_PERSON)
+  status         AppointmentStatus @default(PENDING)
+
+  // Motivo de consulta
+  reason         String?
+  internalNotes  String?           // Solo visible para staff, jamás al paciente
+
+  // Domicilio — solo cuando type = HOME_VISIT
+  homeAddress    String?
+
+  // Origen y trazabilidad
+  bookedVia      BookingSource     @default(STAFF)
+  waMessageId    String?           // ID del mensaje WA origen (para deduplicación)
+  waPhoneNumber  String?           // Número WA desde donde agendó
+
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([doctorClinicId, startTime])
+  @@index([patientId])
+  @@index([status])
+  @@map("appointments")
 }

@@ -103,10 +103,6 @@ export class ClinicsService {
       select: {
         id: true,
         name: true,
-        address: true,
-        city: true,
-        brandColor: true,
-        logoUrl: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -834,6 +830,34 @@ export class ClinicsService {
         isPrimary: dto.isPrimary ?? false,
         isActive: true,
       },
+      select: DOCTOR_IN_CLINIC_SELECT,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // DAR DE BAJA DOCTOR (Soft-Delete)
+  // PATCH /api/clinics/:id/doctors/:doctorProfileId/deactivate
+  // Solo ADMIN_SYSTEM y MAIN_DOCTOR
+  // ─────────────────────────────────────────────────────────────
+
+  async deactivateDoctor(clinicId: string, doctorProfileId: string) {
+    const existing = await this.prisma.doctorClinic.findUnique({
+      where: {
+        doctorProfileId_clinicId: {
+          doctorProfileId,
+          clinicId,
+        },
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Relación médico-consultorio no encontrada');
+    }
+
+    // Solamente ponemos isActive en false
+    return this.prisma.doctorClinic.update({
+      where: { id: existing.id },
+      data: { isActive: false },
       select: DOCTOR_IN_CLINIC_SELECT,
     });
   }

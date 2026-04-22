@@ -4,7 +4,9 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true, // Necesario para validar X-Hub-Signature-256 en el webhook
+  });
 
   app.enableCors({
     origin: process.env.FRONTEND_URL || '*',
