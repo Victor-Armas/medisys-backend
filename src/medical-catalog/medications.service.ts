@@ -5,6 +5,8 @@ export interface MedicationSearchResult {
   id: string;
   name: string;
   rxnormCode: string | null;
+  form: string | null;
+  concentration: string | null;
 }
 
 @Injectable()
@@ -22,7 +24,14 @@ export class MedicationsService {
         isActive: true,
         name: { contains: clean, mode: 'insensitive' },
       },
-      select: { id: true, name: true, description: true, rxnormCode: true },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        rxnormCode: true,
+        form: true,
+        concentration: true,
+      },
       orderBy: [{ searchCount: 'desc' }, { name: 'asc' }],
       take: Math.min(limit, 20),
     });

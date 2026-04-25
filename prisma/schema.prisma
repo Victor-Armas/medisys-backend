@@ -523,14 +523,18 @@ model Icd10Code {
 
 model MedicationCatalog {
   id          String  @id @default(uuid())
-  /// Generic name (e.g. "Metformina")
-  name        String  
-  description String? // Aquí la descripción (ej: TABLETA 500 MG) 
-  /// RxNorm code if available (optional)
-  rxnormCode  String?
-  searchCount Int     @default(0)
-  isActive    Boolean @default(true)
-
+  /// Sustancia activa pura para el buscador (ej. "PARACETAMOL")
+  name            String  
+  /// ¡NUEVA! Presentación (ej. "Tableta", "Suspensión oral")
+  form            String? 
+  /// ¡NUEVA! Gramaje o dosis (ej. "500 mg", "2 g / 100 ml")
+  concentration   String? 
+  /// Toda la descripción gubernamental junta (por si se necesita imprimir legalmente)
+  description     String? @db.Text 
+  /// Clave oficial del CNIS de 12 dígitos
+  rxnormCode      String? @unique
+  searchCount     Int     @default(0)
+  isActive        Boolean @default(true)
   medications PatientMedication[]
 
   @@index([name])

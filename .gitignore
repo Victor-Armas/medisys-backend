@@ -66,3 +66,6 @@ CPdescarga.txt
 prisma/seed.ts
 prisma/seed-sepomex.ts
 prisma/seed-neighborhoods.ts
+prisma/icd10.ts
+prisma/seed-medication.ts
+data

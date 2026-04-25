@@ -2,7 +2,6 @@ import { PrismaClient } from '@generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import fs from 'fs';
 import path from 'path';
-import readline from 'readline';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -16,74 +15,76 @@ interface Icd10Row {
 const BATCH_SIZE = 1000;
 
 /**
- * PARSER ROBUSTO ANTI-DESPLAZAMIENTO
+ * Parsea una línea del JSON (que ya es un array de strings)
+ * y mapea los campos relevantes a Icd10Row.
  */
-function parseCie10Line(line: string): Icd10Row | null {
-  // Dividimos por coma, pero el regex ayuda a ignorar comas dentro de comillas si existen
-  const columns: string[] = line.split(',');
+function parseRecord(
+  record: string[],
+  fields: { id: string }[],
+): Icd10Row | null {
+  // Buscar índices de las columnas que nos interesan
+  const catalogKeyIndex = fields.findIndex((f) => f.id === 'CATALOG_KEY');
+  const nameIndex = fields.findIndex((f) => f.id === 'NOMBRE');
+  const chapterIndex = fields.findIndex((f) => f.id === 'CAPITULO');
 
-  // Columnas fijas al inicio
-  const code = columns[2]?.replace(/"/g, '').trim();
-  const description = columns[4]?.replace(/"/g, '').trim();
+  const rawCode = record[catalogKeyIndex]?.trim();
+  const rawDescription = record[nameIndex]?.trim();
+  const rawCategory = record[chapterIndex]?.trim();
 
-  if (!code || !description || code === 'CATALOG_KEY' || code.length < 3) {
-    return null;
-  }
+  // Validaciones básicas
+  if (!rawCode || !rawDescription) return null;
+  if (rawCode === 'CATALOG_KEY' || rawCode.length < 3) return null;
 
-  /**
-   * BUSCADOR DE CAPÍTULO:
-   * En lugar de confiar en el índice 22 o 26, buscamos en el rango donde
-   * suele estar la descripción larga del capítulo (usualmente del 20 al 30).
-   */
-  let category = 'GENERAL';
-  const scanRange = [22, 23, 24, 25, 26, 27, 28];
-
-  for (const idx of scanRange) {
-    const val = columns[idx]?.replace(/"/g, '').trim() || '';
-    // El nombre de un capítulo real es largo (ej. "ENFERMEDADES DEL SISTEMA...")
-    // Si tiene más de 12 caracteres y no es el código romano, es nuestra categoría.
-    if (val.length > 12 && !/^[IVXLCDM]+$/.test(val)) {
-      category = val;
-      break;
-    }
-  }
+  // Si la categoría está vacía o no existe, asignamos 'GENERAL'
+  const category =
+    rawCategory && rawCategory.length > 0 ? rawCategory : 'GENERAL';
 
   return {
-    code: code.toUpperCase(),
-    description: description.toUpperCase(),
+    code: rawCode.toUpperCase(),
+    description: rawDescription.toUpperCase(),
     category: category.toUpperCase(),
   };
 }
 
 async function main() {
-  console.log('\n🚀 [ETL] INICIANDO IMPORTACIÓN CIE-10 (DGIS MÉXICO)');
+  console.log('\n🚀 [ETL] INICIANDO IMPORTACIÓN CIE-10 DESDE JSON');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   // 1. LIMPIEZA AUTOMÁTICA
   console.log('🧹 Limpiando tabla Icd10Code...');
   await prisma.icd10Code.deleteMany({});
 
-  const filePath = path.join(process.cwd(), 'data/catalogo_cie10.csv');
+  const filePath = path.join(process.cwd(), 'data/CIE-10.json');
   if (!fs.existsSync(filePath)) {
     throw new Error(`❌ No se encontró el archivo en: ${filePath}`);
   }
 
-  // 2. LECTURA CON ENCODING CORRECTO (UTF-8 según tu prueba de terminal)
-  const fileStream = fs.createReadStream(filePath, { encoding: 'utf8' });
-  const rl = readline.createInterface({
-    input: fileStream,
-    crlfDelay: Infinity,
-  });
+  // 2. LEER Y PARSEAR EL JSON
+  const rawData = fs.readFileSync(filePath, { encoding: 'utf8' });
+  const jsonData = JSON.parse(rawData);
+
+  if (
+    !jsonData.fields ||
+    !jsonData.records ||
+    !Array.isArray(jsonData.records)
+  ) {
+    throw new Error(
+      '❌ Formato de JSON inválido. Se esperaban "fields" y "records".',
+    );
+  }
+
+  const fields: { id: string }[] = jsonData.fields;
+  const records: string[][] = jsonData.records;
+
+  console.log(`📦 Procesando ${records.length} registros...`);
 
   let batch: Icd10Row[] = [];
   let totalProcessed = 0;
   let totalInserted = 0;
 
-  console.log('📦 Procesando y normalizando registros...');
-
-  for await (const line of rl) {
+  for (const record of records) {
     totalProcessed++;
-    const parsed = parseCie10Line(line);
+    const parsed = parseRecord(record, fields);
 
     if (parsed) {
       batch.push(parsed);
@@ -113,8 +114,9 @@ async function main() {
 
   console.log('\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🎉 IMPORTACIÓN EXITOSA');
-  console.log(`✅ Registros finales en DB: ${totalInserted}`);
-  console.log('💡 Los nombres de capítulos ahora están normalizados.');
+  console.log(`✅ Registros procesados: ${totalProcessed}`);
+  console.log(`✅ Registros insertados: ${totalInserted}`);
+  console.log('💡 Códigos CIE-10 cargados desde JSON correctamente.');
 }
 
 main()
