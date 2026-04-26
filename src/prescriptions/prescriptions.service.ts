@@ -22,11 +22,9 @@ const PRESCRIPTION_DETAIL_SELECT = {
   doctorName: true,
   doctorLicense: true,
   doctorSpecialty: true,
-  doctorSignatureUrl: true,
   clinicName: true,
   clinicAddress: true,
   clinicPhone: true,
-  clinicLogoUrl: true,
   pdfUrl: true,
   pdfPublicId: true,
   issuedAt: true,
@@ -188,13 +186,11 @@ export class PrescriptionsService {
           doctorName: profile?.fullTitle ?? doctorFullName,
           doctorLicense: profile?.professionalLicense ?? '',
           doctorSpecialty: profile?.specialty ?? null,
-          doctorSignatureUrl: profile?.signatureUrl ?? null,
 
           // Snapshot del consultorio
           clinicName: clinic?.name ?? '',
           clinicAddress: clinic?.address ?? null,
           clinicPhone: clinic?.phone ?? null,
-          clinicLogoUrl: clinic?.logoUrl ?? null,
 
           issuedAt,
           expiresAt,
@@ -392,7 +388,7 @@ export class PrescriptionsService {
     const publicId = `medisys/prescriptions/${id}`;
     const result = await this.cloudinary.uploadStream(
       pdfBuffer,
-      'medisys/prescriptions' as any,
+      'medisys/prescriptions',
       publicId,
     );
 
