@@ -105,6 +105,33 @@ export class CreateVitalSignsDTO {
   notes?: string;
 }
 
+export class CreatePatientInlineDTO extends PartialType(
+  PickType(CreatePatientDTO, [
+    'firstName',
+    'middleName',
+    'lastNamePaternal',
+    'lastNameMaternal',
+    'birthDate',
+    'gender',
+    'phone',
+  ] as const),
+) {
+  // 🔒 Reforzar obligatorios reales del modelo
+  @IsString()
+  @IsNotEmpty()
+  firstName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  lastNamePaternal: string;
+
+  @IsDateString()
+  birthDate: string;
+
+  @IsEnum(Gender)
+  gender: Gender;
+}
+
 // ── DTO principal ─────────────────────────────────────────────────────────────
 
 export class CreateConsultationDTO {
@@ -205,31 +232,4 @@ export class CreateConsultationDTO {
   @ValidateNested({ each: true })
   @Type(() => CreateDiagnosisDTO)
   diagnoses?: CreateDiagnosisDTO[];
-}
-
-export class CreatePatientInlineDTO extends PartialType(
-  PickType(CreatePatientDTO, [
-    'firstName',
-    'middleName',
-    'lastNamePaternal',
-    'lastNameMaternal',
-    'birthDate',
-    'gender',
-    'phone',
-  ] as const),
-) {
-  // 🔒 Reforzar obligatorios reales del modelo
-  @IsString()
-  @IsNotEmpty()
-  firstName: string;
-
-  @IsString()
-  @IsNotEmpty()
-  lastNamePaternal: string;
-
-  @IsDateString()
-  birthDate: string;
-
-  @IsEnum(Gender)
-  gender: Gender;
 }
