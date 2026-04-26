@@ -7,7 +7,8 @@ export type CloudinaryFolder =
   | 'medisys/doctors/photos'
   | 'medisys/doctors/signatures'
   | 'medisys/clinics/logos'
-  | 'medisys/patients/medical-files';
+  | 'medisys/patients/medical-files'
+  | 'medisys/prescriptions';
 
 @Injectable()
 export class CloudinaryService {

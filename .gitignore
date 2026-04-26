@@ -68,4 +68,6 @@ prisma/seed-sepomex.ts
 prisma/seed-neighborhoods.ts
 prisma/icd10.ts
 prisma/seed-medication.ts
+prisma/seed-sugerencias.ts
+
 data

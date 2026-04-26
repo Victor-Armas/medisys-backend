@@ -9,7 +9,8 @@ export default defineConfig({
     path: 'prisma/migrations',
     // seed: 'tsx prisma/seed.ts',
     // seed: 'tsx prisma/seed-icd10.ts',
-    seed: 'tsx prisma/seed-medication.ts',
+    // seed: 'tsx prisma/seed-medication.ts',
+    seed: 'tsx prisma/seed-sugerencias.ts',
   },
   datasource: {
     url: process.env['DATABASE_URL'],

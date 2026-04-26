@@ -14,6 +14,8 @@ import { SepomexModule } from './sepomex/sepomex.module';
 import { MedicalCatalogModule } from './medical-catalog/medical-catalog.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { AppointmentsModule } from './appointments/appointments.module';
+import { ConsultationsModule } from './consultations/consultations.module';
+import { PrescriptionsModule } from './prescriptions/prescriptions.module';
 
 @Module({
   imports: [
@@ -47,6 +49,10 @@ import { AppointmentsModule } from './appointments/appointments.module';
     //── Fase 3 ────────────────────────────────────────────────
     AppointmentsModule,
     WhatsappModule,
+
+    //── Fase 4 y 5 ────────────────────────────────────────────────
+    ConsultationsModule,
+    PrescriptionsModule,
   ],
   providers: [
     // Aplica ThrottlerGuard a TODOS los endpoints de la app

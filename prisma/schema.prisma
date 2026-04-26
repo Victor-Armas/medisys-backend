@@ -148,6 +148,60 @@ enum BookingSource {
   PHONE       // Registrada manualmente por recepción
 }
 
+
+// ============================================================
+// ENUMS — FASE 4 / 5 (Consultas y Recetas)
+// ============================================================
+
+/// Tipo de consulta — determina qué secciones del expediente se llenan
+enum ConsultationType {
+  FIRST_VISIT      // Primera vez con este médico
+  FOLLOW_UP        // Seguimiento de padecimiento previo
+  URGENT           // Urgencia / sin cita previa
+  ROUTINE          // Revisión de rutina / preventiva
+  PROCEDURE        // Procedimiento (curación, inyección, etc.)
+}
+
+/// Clasificación diagnóstica en la nota médica
+/// Basado en el estándar de la Nota de Evolución NOM-004-SSA3-2012
+enum DiagnosisType {
+  DEFINITIVE       // Diagnóstico definitivo
+  PRESUMPTIVE      // Diagnóstico presuntivo / a descartar
+  ASSOCIATED       // Padecimiento asociado (comorbilidad)
+  COMPLICATION     // Complicación del diagnóstico principal
+}
+
+/// Estado de la receta
+enum PrescriptionStatus {
+  DRAFT            // En construcción, no impresa
+  ISSUED           // Emitida y firmada (PDF generado)
+  CANCELLED        // Anulada antes de ser entregada
+}
+
+/// Condición general del paciente al momento de la consulta
+enum GeneralCondition {
+  GOOD             // Buen estado general
+  FAIR             // Regular
+  POOR             // Malo
+  CRITICAL         // Crítico
+}
+
+/// Vía de administración del medicamento
+enum MedicationRoute {
+  ORAL             // Vía oral (tabletas, cápsulas, jarabe)
+  TOPICAL          // Vía tópica (cremas, ungüentos)
+  INTRAVENOUS      // Intravenosa (IV)
+  INTRAMUSCULAR    // Intramuscular (IM)
+  SUBCUTANEOUS     // Subcutánea (SC)
+  INHALED          // Inhalada (aerosol, nebulización)
+  SUBLINGUAL       // Sublingual
+  RECTAL           // Rectal (supositorios)
+  OPHTHALMIC       // Oftálmica (gotas oculares)
+  OTIC             // Ótica (gotas para oídos)
+  NASAL            // Nasal (gotas, spray)
+  OTHER            // Otra vía
+}
+
 // ============================================================
 // USER — Usuario del sistema (staff: admin, médicos, recepcionistas)
 // ============================================================
@@ -239,6 +293,7 @@ model Clinic {
   // Relaciones
   doctorClinics  DoctorClinic[]                      // Médicos asignados a este consultorio
   patients      PatientClinic[]
+  folioSequences  FolioSequence[]
 
 }
 
@@ -296,6 +351,8 @@ model DoctorClinic {
   scheduleRanges ScheduleRange[]
   scheduleOverrides ScheduleOverride[]
   appointments Appointment[]
+  consultations   Consultation[]
+  prescriptions   Prescription[]
 
   @@unique([doctorProfileId, clinicId])
 }
@@ -345,9 +402,9 @@ model Patient {
   medications PatientMedication[]
   allergies   PatientAllergy[]
   appointments Appointment[]
-  // Fases siguientes:
-  // consultations Consultation[]
-  // prescriptions Prescription[]
+  consultations   Consultation[]
+  prescriptions   Prescription[]
+
 }
 
 // ============================================================
@@ -535,7 +592,10 @@ model MedicationCatalog {
   rxnormCode      String? @unique
   searchCount     Int     @default(0)
   isActive        Boolean @default(true)
+
   medications PatientMedication[]
+  suggestions         IcdMedicationSuggestion[]
+  prescriptionItems   PrescriptionItem[]
 
   @@index([name])
 }
@@ -718,8 +778,374 @@ model Appointment {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
+  consultation    Consultation?
+
   @@index([doctorClinicId, startTime])
   @@index([patientId])
   @@index([status])
   @@map("appointments")
+}
+
+
+// ============================================================
+// CONSULTATION — Nota de Evolución / Consulta médica
+//
+// DECISIONES DE DISEÑO:
+//   1. Separado de Appointment: Una cita puede existir sin consulta
+//      (cancelada, no-show). La consulta es el acto médico real.
+//   2. Campos de texto libre para los hallazgos y planes porque
+//      la práctica clínica requiere narrativa, no solo datos estructurados.
+//   3. consultedAt !== startTime de la cita: el médico puede llegar tarde,
+//      atrasarse, o la consulta puede durar más de lo agendado.
+//   4. folioNumber: secuencia CON-YYYY-NNNNNN por consultorio para auditoría.
+//
+// NOM-004-SSA3-2012 (Expediente Clínico):
+//   - Motivo de consulta ✓ (reasonForVisit)
+//   - Padecimiento actual ✓ (currentCondition)
+//   - Exploración física ✓ (physicalExamFindings)
+//   - Resultados de estudios ✓ (labResultsSummary)
+//   - Diagnóstico ✓ (ConsultationDiagnosis)
+//   - Tratamiento ✓ (treatmentPlan + Prescription)
+//   - Pronóstico ✓ (prognosis)
+// ============================================================
+
+model Consultation {
+  id              String   @id @default(uuid())
+
+  // Folio único para trazabilidad y auditoría
+  // Formato: CON-2025-000001 (generado en el service, no en DB)
+  folioNumber     String   @unique
+
+  // Relación con la cita que originó esta consulta (puede ser null
+  // si el médico crea la consulta sin cita previa — caso urgencias)
+  appointmentId   String?  @unique
+  appointment     Appointment? @relation(fields: [appointmentId], references: [id])
+
+  // Paciente y médico — aunque ya vienen por la cita, los desnormalizamos
+  // aquí para que la consulta sea autónoma (el expediente debe funcionar
+  // aunque se borre una cita)
+  patientId       String
+  patient         Patient  @relation(fields: [patientId], references: [id])
+
+  doctorClinicId  String
+  doctorClinic    DoctorClinic @relation(fields: [doctorClinicId], references: [id])
+
+  consultationType ConsultationType @default(FOLLOW_UP)
+
+  // ── Sección 1: Motivo de consulta y padecimiento actual ────────────────
+  // NOM-004 §4.2.1 — texto libre, obligatorio
+  reasonForVisit    String   @db.Text
+  currentCondition  String   @db.Text  // Padecimiento actual (evolución, síntomas, etc.)
+
+  // ── Sección 2: Exploración física ─────────────────────────────────────
+  // Los signos vitales van en VitalSigns (modelo separado para tipado fuerte)
+  physicalExamFindings String?  @db.Text // Hallazgos de la exploración física
+
+  // ── Sección 3: Estudios de laboratorio e imagen ────────────────────────
+  // Resumen narrativo — los archivos físicos van en PatientMedicalFile
+  labResultsSummary String?  @db.Text
+
+  // ── Sección 4: Diagnóstico ─────────────────────────────────────────────
+  // Los diagnósticos van en ConsultationDiagnosis (modelo separado para ICD-10)
+  clinicalImpressions String? @db.Text // Impresión clínica / notas diagnósticas
+
+  // ── Sección 5: Tratamiento y plan ─────────────────────────────────────
+  // La receta va en Prescription (modelo separado para PDF y trazabilidad)
+  treatmentPlan     String?  @db.Text  // Plan de tratamiento no farmacológico
+  patientInstructions String? @db.Text // Indicaciones para el paciente
+  prognosis         String?  @db.Text  // Pronóstico
+
+  // ── Seguimiento ────────────────────────────────────────────────────────
+  requiresFollowUp  Boolean  @default(false)
+  followUpDays      Int?     // En cuántos días debe regresar
+  followUpNotes     String?  // Notas sobre el seguimiento
+
+  // ── Metadatos ──────────────────────────────────────────────────────────
+  // consultedAt es el momento real de la consulta (puede diferir de startTime)
+  consultedAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relaciones
+  vitalSigns      VitalSigns?
+  diagnoses       ConsultationDiagnosis[]
+  prescription    Prescription?
+
+  @@index([patientId, consultedAt])
+  @@index([doctorClinicId, consultedAt])
+  @@index([folioNumber])
+  @@map("consultations")
+}
+
+// ============================================================
+// VITAL SIGNS — Signos Vitales
+//
+// DECISIONES DE DISEÑO:
+//   1. Modelo separado de Consultation para poder tipar fuertemente
+//      cada campo (Float, Int) en lugar de texto libre.
+//   2. Relación 1:1 con Consultation — se llenaN al inicio de la consulta.
+//   3. BMI se calcula y almacena (no es solo campo derivado) porque
+//      el médico puede corregirlo o necesitamos histórico.
+//   4. bloodPressure como String "120/80" porque el médico así lo dicta;
+//      podría normalizarse a systolic/diastolic Int pero agrega complejidad
+//      sin beneficio claro para el MVP.
+// ============================================================
+
+model VitalSigns {
+  id              String       @id @default(uuid())
+  consultationId  String       @unique
+  consultation    Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+
+  // ── Antropometría ──────────────────────────────────────────────────────
+  weightKg        Float?   // Peso en kilogramos (ej: 68.5)
+  heightCm        Float?   // Talla en centímetros (ej: 170.0)
+  bmi             Float?   // IMC calculado (ej: 23.7) — se guarda para histórico
+
+  // ── Signos vitales ─────────────────────────────────────────────────────
+  bloodPressure   String?  // Presión arterial "sistólica/diastólica" (ej: "120/80")
+  heartRateBpm    Int?     // Frecuencia cardíaca en latidos por minuto
+  respiratoryRate Int?     // Frecuencia respiratoria por minuto
+  temperatureC    Float?   // Temperatura corporal en Celsius (ej: 36.6)
+  oxygenSaturation Int?   // Saturación de oxígeno en % (ej: 98)
+
+  // ── Glucometría ────────────────────────────────────────────────────────
+  // String porque puede ser "125 (ayunas)" o "210 (posprandial)"
+  glucoseMgdl     String?
+
+  // ── Condición general ─────────────────────────────────────────────────
+  generalCondition GeneralCondition @default(GOOD)
+
+  // ── Notas adicionales ──────────────────────────────────────────────────
+  // Para observaciones que no caben en los campos anteriores
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("vital_signs")
+}
+
+// ============================================================
+// CONSULTATION DIAGNOSIS — Diagnósticos de la consulta
+//
+// DECISIONES DE DISEÑO:
+//   1. Muchos diagnósticos por consulta (principal + asociados).
+//   2. Guarda una copia del description en el momento de la consulta
+//      (snapshot) para que el expediente no cambie si el catálogo ICD-10
+//      se actualiza en el futuro.
+//   3. isMain marca el diagnóstico principal (el que va en la receta).
+//   4. La relación con Icd10Code es por el código string (no UUID) porque
+//      así está diseñado tu catálogo y es el estándar internacional.
+// ============================================================
+
+model ConsultationDiagnosis {
+  id              String       @id @default(uuid())
+  consultationId  String
+  consultation    Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+
+  // Snapshot del código y descripción al momento de la consulta
+  icd10Code       String?      // Puede ser null si el médico lo escribe en texto libre
+  description     String       // Siempre requerido — texto legible del diagnóstico
+  diagnosisType   DiagnosisType @default(DEFINITIVE)
+  isMain          Boolean      @default(false) // Solo uno puede ser true por consulta
+  notes           String?      // Notas clínicas sobre este diagnóstico específico
+
+  sortOrder       Int          @default(0) // Para ordenar diagnósticos en el expediente
+
+  createdAt       DateTime     @default(now())
+
+  // Un diagnóstico puede tener medicamentos sugeridos en la receta
+  prescriptionItems PrescriptionItem[]
+
+  @@index([consultationId])
+  @@map("consultation_diagnoses")
+}
+
+// ============================================================
+// PRESCRIPTION — Receta médica
+//
+// DECISIONES DE DISEÑO:
+//   1. Separado de Consultation porque tiene su propio ciclo de vida
+//      (puede generarse, imprimirse, anularse y regenerarse).
+//   2. Snapshot completo del médico al momento de emisión para que
+//      la receta sea válida legalmente aunque cambie el perfil.
+//   3. pdfUrl + pdfPublicId: el PDF se guarda en Cloudinary y tiene
+//      acceso por 30 días (tu Fase 5 lo indica).
+//   4. expiresAt: las recetas en México tienen validez de 30 días
+//      para medicamentos del cuadro básico, 6 meses para IECE.
+//   5. folioNumber: secuencia REC-YYYY-NNNNNN independiente de la consulta.
+// ============================================================
+
+model Prescription {
+  id              String   @id @default(uuid())
+
+  // Folio único — formato REC-2025-000001
+  folioNumber     String   @unique
+
+  consultationId  String   @unique
+  consultation    Consultation @relation(fields: [consultationId], references: [id])
+
+  patientId       String
+  patient         Patient  @relation(fields: [patientId], references: [id])
+
+  doctorClinicId  String
+  doctorClinic    DoctorClinic @relation(fields: [doctorClinicId], references: [id])
+
+  status          PrescriptionStatus @default(DRAFT)
+
+  // ── Snapshot del médico al momento de emitir ───────────────────────────
+  // CRÍTICO para validez legal: el expediente debe reflejar quién era
+  // el médico al momento de la consulta, aunque luego cambie sus datos.
+  doctorName      String   // Nombre completo del médico al momento de emisión
+  doctorLicense   String   // Cédula profesional
+  doctorSpecialty String?  // Especialidad
+  clinicName      String   // Nombre del consultorio
+  clinicAddress   String?  // Dirección del consultorio
+  clinicPhone     String?  // Teléfono del consultorio
+
+  // ── PDF ────────────────────────────────────────────────────────────────
+  pdfUrl          String?  // URL de Cloudinary (válida 30 días desde generación)
+  pdfPublicId     String?  // public_id para eliminación en Cloudinary
+
+  // ── Validez temporal ───────────────────────────────────────────────────
+  issuedAt        DateTime @default(now())
+  expiresAt       DateTime // Calculado en el service (issuedAt + 30 días por default)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Medicamentos de la receta
+  items           PrescriptionItem[]
+
+  @@index([patientId, issuedAt])
+  @@index([doctorClinicId, issuedAt])
+  @@map("prescriptions")
+}
+
+// ============================================================
+// PRESCRIPTION ITEM — Renglón de medicamento en la receta
+//
+// DECISIONES DE DISEÑO:
+//   1. Guarda nombre del medicamento como snapshot (medicationName)
+//      además del FK al catálogo, por si el catálogo cambia.
+//   2. consultationDiagnosisId OPCIONAL: permite saber para qué
+//      diagnóstico se prescribió cada medicamento (trazabilidad clínica)
+//      pero no es obligatorio para el MVP.
+//   3. sortOrder para que el médico pueda reordenar los medicamentos
+//      como aparecerán en la receta impresa.
+//   4. route como String (no enum) para mayor flexibilidad —
+//      el médico puede escribir "V.O." o "tópico" libremente.
+// ============================================================
+
+model PrescriptionItem {
+  id                  String       @id @default(uuid())
+  prescriptionId      String
+  prescription        Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  // FK opcional al diagnóstico que originó esta prescripción
+  consultationDiagnosisId String?
+  consultationDiagnosis   ConsultationDiagnosis? @relation(fields: [consultationDiagnosisId], references: [id])
+
+  // FK al catálogo (puede ser null si el médico escribe un medicamento no catalogado)
+  catalogId           String?
+  catalog             MedicationCatalog? @relation(fields: [catalogId], references: [id])
+
+  // Snapshot del medicamento — sobrevive a cambios en el catálogo
+  medicationName      String       // Nombre genérico (ej: "Paracetamol")
+  brandName           String?      // Nombre comercial opcional (ej: "Tylenol")
+
+  // ── Indicaciones clínicas ──────────────────────────────────────────────
+  dose                String       // (ej: "500 mg", "1 tableta")
+  frequency           String       // (ej: "cada 8 horas", "tres veces al día")
+  duration            String       // (ej: "7 días", "hasta terminar")
+  route               String?      // (ej: "Vía oral", "Tópico")
+  quantity            Int?         // Unidades a dispensar (ej: 21 tabletas)
+
+  // Instrucciones adicionales para el paciente
+  instructions        String?      // (ej: "Tomar con alimentos", "Evitar alcohol")
+
+  // Para ordenar en la receta impresa
+  sortOrder           Int          @default(0)
+
+  createdAt           DateTime     @default(now())
+
+  @@index([prescriptionId])
+  @@map("prescription_items")
+}
+
+// ============================================================
+// ICD MEDICATION SUGGESTION — Tabla de sugerencias CDS
+//
+// DECISIONES DE DISEÑO:
+//   1. Esta es la pieza central del "autocomplete inteligente".
+//      El backend la consulta cuando el médico selecciona un ICD-10
+//      y retorna sugerencias ordenadas por priority y usageCount.
+//   2. usageCount: se incrementa CADA VEZ que el médico acepta una
+//      sugerencia en una receta real → el sistema aprende con el uso.
+//   3. priority: valor inicial fijo (basado en GPC del CENETEC o criterio
+//      del admin médico); usageCount lo desplaza en los resultados.
+//   4. Los campos default* son puntos de partida editables, no obligatorios.
+//   5. icd10Code es String (no FK con UUID) porque así está en tu schema
+//      actual de Icd10Code — mantiene consistencia.
+// ============================================================
+
+model IcdMedicationSuggestion {
+  id                  String   @id @default(uuid())
+
+  // El diagnóstico
+  icd10Code           String
+  // No hacemos @relation aquí porque Icd10Code.code es el campo @unique
+  // y Prisma requiere FK hacia el @id (uuid). Lo resolvemos en el service
+  // con una consulta previa. Si en el futuro agregas codeId, se puede migrar.
+
+  // El medicamento sugerido
+  medicationCatalogId String
+  medicationCatalog   MedicationCatalog @relation(fields: [medicationCatalogId], references: [id])
+
+  // Valores por defecto — pre-llenados en la receta pero editables
+  defaultDose         String?  // (ej: "500 mg")
+  defaultFrequency    String?  // (ej: "cada 8 horas")
+  defaultDuration     String?  // (ej: "7 días")
+  defaultRoute        String?  // (ej: "Vía oral")
+  defaultQuantity     Int?     // Unidades por default
+
+  // Clasificación y aprendizaje
+  priority            Int      @default(10) // Menor = más importante en la lista
+  usageCount          Int      @default(0)  // Se incrementa cuando el médico acepta la sugerencia
+
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([icd10Code, medicationCatalogId]) // Un medicamento por diagnóstico (sin duplicados)
+  @@index([icd10Code, priority, usageCount]) // Índice compuesto para el query de sugerencias
+  @@map("icd_medication_suggestions")
+}
+
+// ============================================================
+// FOLIO SEQUENCE — Secuencias de folios por consultorio
+//
+// DECISIONES DE DISEÑO:
+//   1. Separado de las consultas/recetas para poder tener secuencias
+//      independientes por tipo y por consultorio.
+//   2. Se usa SELECT FOR UPDATE (transacción) en el service para
+//      garantizar unicidad bajo carga concurrente.
+//   3. prefix + year + lastNumber → "CON-2025-000001"
+//   4. Un registro por (clinicId, type, year) — se reinicia cada año.
+// ============================================================
+
+model FolioSequence {
+  id          String   @id @default(uuid())
+  clinicId    String
+  clinic      Clinic   @relation(fields: [clinicId], references: [id])
+
+  // Tipo de documento: CON = consulta, REC = receta, APT = cita (si se necesita)
+  type        String   // "CON" | "REC"
+  year        Int      // Año de la secuencia (se reinicia cada enero)
+  lastNumber  Int      @default(0) // Último número emitido
+
+  updatedAt   DateTime @updatedAt
+
+  @@unique([clinicId, type, year])
+  @@map("folio_sequences")
 }
