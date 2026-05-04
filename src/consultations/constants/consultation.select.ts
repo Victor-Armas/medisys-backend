@@ -48,6 +48,10 @@ export const CONSULTATION_LIST_SELECT = {
       lastNamePaternal: true,
       birthDate: true,
       gender: true,
+      allergies: {
+        where: { isActive: true },
+        select: { substance: true, severity: true },
+      },
     },
   },
   doctorClinic: {
@@ -87,6 +91,34 @@ export const CONSULTATION_LIST_SELECT = {
 // ── Consulta en detalle (completo) ────────────────────────────────────────────
 export const CONSULTATION_DETAIL_SELECT = {
   ...CONSULTATION_LIST_SELECT,
+  doctorClinic: {
+    select: {
+      id: true,
+      clinic: {
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          phone: true,
+          logoUrl: true,
+        },
+      },
+      doctorProfile: {
+        select: {
+          professionalLicense: true,
+          specialty: true,
+          signatureUrl: true,
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastNamePaternal: true,
+            },
+          },
+        },
+      },
+    },
+  },
   currentCondition: true,
   physicalExamFindings: true,
   labResultsSummary: true,

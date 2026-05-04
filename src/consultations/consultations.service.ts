@@ -2,8 +2,10 @@
 
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,20 +23,18 @@ import {
 
 @Injectable()
 export class ConsultationsService {
+  private readonly logger = new Logger(ConsultationsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   // ── CREAR ──────────────────────────────────────────────────────────────────
 
-  /**
-   * Crea la consulta completa en una sola transacción:
-   * Consultation + VitalSigns (opcional) + Diagnósticos (opcional) + Folio CON
-   */
   async create(
     dto: CreateConsultationDTO,
     requestingUserId: string,
     userRole: string,
   ) {
-    // 1. Validar DoctorClinic y AUTORIZACIÓN (KISS y Seguridad)
+    // 1. Validaciones de autorización y existencia de cita/paciente
     const doctorClinic = await this.prisma.doctorClinic.findUnique({
       where: { id: dto.doctorClinicId },
       select: {
@@ -51,7 +51,6 @@ export class ConsultationsService {
       );
     }
 
-    // Usamos el requestingUserId para evitar que un médico cree consultas a nombre de otro
     if (
       userRole === 'DOCTOR' &&
       doctorClinic.doctorProfile.userId !== requestingUserId
@@ -61,7 +60,6 @@ export class ConsultationsService {
       );
     }
 
-    // 2. Validar Cita (Si aplica)
     if (dto.appointmentId) {
       const appointment = await this.prisma.appointment.findUnique({
         where: { id: dto.appointmentId },
@@ -75,71 +73,99 @@ export class ConsultationsService {
       }
     }
 
-    // 3. Resolver Paciente (Lazy Registration) - Extraído para Clean Code
     const patientId = await this.resolvePatient(dto);
 
-    // 4. Transacción Atómica
-    return this.prisma.$transaction(async (tx) => {
-      const folio = await this.generateFolio(tx, doctorClinic.clinicId, 'CON');
+    // 2. Datos base de la consulta (sin folio)
+    const baseData = {
+      appointmentId: dto.appointmentId ?? null,
+      patientId,
+      doctorClinicId: dto.doctorClinicId,
+      consultationType: dto.consultationType ?? 'FOLLOW_UP',
+      reasonForVisit: dto.reasonForVisit,
+      currentCondition: dto.currentCondition,
+      physicalExamFindings: dto.physicalExamFindings ?? null,
+      labResultsSummary: dto.labResultsSummary ?? null,
+      clinicalImpressions: dto.clinicalImpressions ?? null,
+      treatmentPlan: dto.treatmentPlan ?? null,
+      patientInstructions: dto.patientInstructions ?? null,
+      prognosis: dto.prognosis ?? null,
+      requiresFollowUp: dto.requiresFollowUp ?? false,
+      followUpDays: dto.followUpDays ?? null,
+      followUpNotes: dto.followUpNotes ?? null,
 
-      const consultation = await tx.consultation.create({
-        data: {
-          folioNumber: folio,
-          appointmentId: dto.appointmentId ?? null,
-          patientId, // Paciente ya validado o creado al vuelo
-          doctorClinicId: dto.doctorClinicId,
-          consultationType: dto.consultationType ?? 'FOLLOW_UP',
-          reasonForVisit: dto.reasonForVisit,
-          currentCondition: dto.currentCondition,
-          physicalExamFindings: dto.physicalExamFindings ?? null,
-          labResultsSummary: dto.labResultsSummary ?? null,
-          clinicalImpressions: dto.clinicalImpressions ?? null,
-          treatmentPlan: dto.treatmentPlan ?? null,
-          patientInstructions: dto.patientInstructions ?? null,
-          prognosis: dto.prognosis ?? null,
-          requiresFollowUp: dto.requiresFollowUp ?? false,
-          followUpDays: dto.followUpDays ?? null,
-          followUpNotes: dto.followUpNotes ?? null,
-
-          ...(dto.vitalSigns && {
-            vitalSigns: {
-              create: {
-                ...dto.vitalSigns,
-                bmi: this.calculateBmi(
-                  dto.vitalSigns.weightKg,
-                  dto.vitalSigns.heightCm,
-                  dto.vitalSigns.bmi,
-                ),
-              },
-            },
-          }),
-
-          ...(dto.diagnoses?.length && {
-            diagnoses: {
-              create: dto.diagnoses.map((d, index) => ({
-                icd10Code: d.icd10Code ?? null,
-                description: d.description,
-                diagnosisType: d.diagnosisType ?? 'DEFINITIVE',
-                isMain: d.isMain ?? index === 0,
-                notes: d.notes ?? null,
-                sortOrder: d.sortOrder ?? index,
-              })),
-            },
-          }),
+      ...(dto.vitalSigns && {
+        vitalSigns: {
+          create: {
+            ...dto.vitalSigns,
+            bmi: this.calculateBmi(
+              dto.vitalSigns.weightKg,
+              dto.vitalSigns.heightCm,
+              dto.vitalSigns.bmi,
+            ),
+          },
         },
-        select: CONSULTATION_DETAIL_SELECT,
-      });
+      }),
 
-      // Actualizar el estado de la cita si se enlazó a una
-      if (dto.appointmentId) {
-        await tx.appointment.update({
-          where: { id: dto.appointmentId },
-          data: { status: 'IN_PROGRESS' },
+      ...(dto.diagnoses?.length && {
+        diagnoses: {
+          create: dto.diagnoses.map((d, index) => ({
+            icd10Code: d.icd10Code ?? null,
+            description: d.description,
+            diagnosisType: d.diagnosisType ?? 'DEFINITIVE',
+            isMain: d.isMain ?? index === 0,
+            notes: d.notes ?? null,
+            sortOrder: d.sortOrder ?? index,
+          })),
+        },
+      }),
+    };
+
+    // 3. Bucle de reintentos ante colisiones de unicidad (P2002)
+    const MAX_RETRIES = 3;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const folio = await this.getNextConsultationFolio(tx);
+
+          const consultation = await tx.consultation.create({
+            data: {
+              folioNumber: folio,
+              ...baseData,
+            },
+            select: CONSULTATION_DETAIL_SELECT,
+          });
+
+          if (dto.appointmentId) {
+            await tx.appointment.update({
+              where: { id: dto.appointmentId },
+              data: { status: 'IN_PROGRESS' },
+            });
+          }
+
+          return consultation;
         });
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          if (attempt === MAX_RETRIES - 1) {
+            throw new ConflictException(
+              'Error de unicidad al crear la consulta. Por favor, reintente.',
+            );
+          }
+          await new Promise((resolve) =>
+            setTimeout(resolve, 50 * (attempt + 1)),
+          );
+          continue;
+        }
+        this.logger.error('Error al crear consulta:', err);
+        throw err;
       }
+    }
 
-      return consultation;
-    });
+    throw new Error('No se pudo crear la consulta después de varios intentos');
   }
 
   // ── LISTAR ─────────────────────────────────────────────────────────────────
@@ -156,13 +182,13 @@ export class ConsultationsService {
       dateFrom,
       dateTo,
       consultationType,
+      search,
       page = 1,
       limit = 20,
     } = query;
 
     const where: Prisma.ConsultationWhereInput = {};
 
-    // DOCTOR: solo ve sus propias consultas
     if (userRole === 'DOCTOR') {
       where.doctorClinic = {
         doctorProfile: { userId: requestingUserId },
@@ -170,42 +196,68 @@ export class ConsultationsService {
     }
 
     if (patientId) where.patientId = patientId;
-
-    if (doctorClinicId) {
-      where.doctorClinicId = doctorClinicId;
-    }
-
+    if (doctorClinicId) where.doctorClinicId = doctorClinicId;
     if (clinicId) {
       where.doctorClinic = {
         ...(where.doctorClinic as object),
         clinicId,
       };
     }
-
     if (dateFrom || dateTo) {
       where.consultedAt = {
         ...(dateFrom && { gte: new Date(dateFrom) }),
         ...(dateTo && { lte: new Date(`${dateTo}T23:59:59`) }),
       };
     }
-
     if (consultationType) where.consultationType = consultationType;
 
-    const [consultations, total] = await Promise.all([
-      this.prisma.consultation.findMany({
-        where,
-        select: CONSULTATION_LIST_SELECT,
-        orderBy: { consultedAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      this.prisma.consultation.count({ where }),
-    ]);
+    if (search) {
+      where.OR = [
+        { folioNumber: { contains: search, mode: 'insensitive' } },
+        { patient: { firstName: { contains: search, mode: 'insensitive' } } },
+        {
+          patient: {
+            lastNamePaternal: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          doctorClinic: {
+            doctorProfile: {
+              user: { firstName: { contains: search, mode: 'insensitive' } },
+            },
+          },
+        },
+        {
+          doctorClinic: {
+            doctorProfile: {
+              user: {
+                lastNamePaternal: { contains: search, mode: 'insensitive' },
+              },
+            },
+          },
+        },
+        {
+          diagnoses: {
+            some: { description: { contains: search, mode: 'insensitive' } },
+          },
+        },
+      ];
+    }
+
+    const consultations = await this.prisma.consultation.findMany({
+      where,
+      select: CONSULTATION_LIST_SELECT,
+      orderBy: { consultedAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const total = await this.prisma.consultation.count({ where });
 
     return { consultations, total, page, limit };
   }
 
-  // ── DETALLE ────────────────────────────────────────────────────────────────
+  // ── DETALLE ─────c───────────────────────────────────────────────────────────
 
   async findOne(id: string, requestingUserId: string, userRole: string) {
     const consultation = await this.prisma.consultation.findUnique({
@@ -215,7 +267,6 @@ export class ConsultationsService {
 
     if (!consultation) throw new NotFoundException('Consulta no encontrada');
 
-    // DOCTOR: solo puede ver sus propias consultas
     if (userRole === 'DOCTOR') {
       const ownerId = consultation.doctorClinic.doctorProfile.user.id;
       if (ownerId !== requestingUserId) {
@@ -241,7 +292,6 @@ export class ConsultationsService {
 
     const where: Prisma.ConsultationWhereInput = { patientId };
 
-    // DOCTOR: solo sus consultas del paciente
     if (userRole === 'DOCTOR') {
       where.doctorClinic = {
         doctorProfile: { userId: requestingUserId },
@@ -276,7 +326,6 @@ export class ConsultationsService {
 
     if (!consultation) throw new NotFoundException('Consulta no encontrada');
 
-    // DOCTOR: solo puede editar sus propias consultas
     if (userRole === 'DOCTOR') {
       const ownerId = consultation.doctorClinic.doctorProfile.userId;
       if (ownerId !== requestingUserId) {
@@ -286,14 +335,12 @@ export class ConsultationsService {
       }
     }
 
-    // No se puede editar si la receta ya fue emitida
     if (consultation.prescription?.status === 'ISSUED') {
       throw new BadRequestException(
         'No se puede editar una consulta con receta ya emitida',
       );
     }
 
-    // Actualizar signos vitales si vienen en el DTO
     if (dto.vitalSigns) {
       await this.prisma.vitalSigns.upsert({
         where: { consultationId: id },
@@ -333,7 +380,6 @@ export class ConsultationsService {
       });
     }
 
-    // Extraer vitalSigns, diagnoses y patient del DTO para no pasarlos a la consulta
     const {
       vitalSigns: _vs,
       diagnoses: _dx,
@@ -385,7 +431,6 @@ export class ConsultationsService {
       );
     }
 
-    // Si el nuevo diagnóstico se marca como principal, quitar el flag a los demás
     if (dto.isMain) {
       await this.prisma.consultationDiagnosis.updateMany({
         where: { consultationId, isMain: true },
@@ -454,7 +499,6 @@ export class ConsultationsService {
       where: { id: diagnosisId },
     });
 
-    // Si se eliminó el principal y quedan más, promover el primero
     if (diagnosis.isMain) {
       const remaining = consultation.diagnoses.filter(
         (d) => d.id !== diagnosisId,
@@ -468,50 +512,8 @@ export class ConsultationsService {
     }
   }
 
-  // ── HELPERS PRIVADOS ───────────────────────────────────────────────────────
-
-  private calculateBmi(
-    weightKg: number | undefined,
-    heightCm: number | undefined,
-    providedBmi: number | undefined,
-  ): number | null {
-    // Si el médico lo calculó manualmente, usar ese valor
-    if (providedBmi) return providedBmi;
-    // Calcular solo si tenemos ambos valores
-    if (weightKg && heightCm && heightCm > 0) {
-      const heightM = heightCm / 100;
-      return Math.round((weightKg / (heightM * heightM)) * 10) / 10;
-    }
-    return null;
-  }
-
-  private async generateFolio(
-    tx: Prisma.TransactionClient,
-    clinicId: string,
-    type: 'CON' | 'REC',
-  ): Promise<string> {
-    const year = new Date().getFullYear();
-
-    const sequence = await tx.folioSequence.upsert({
-      where: { clinicId_type_year: { clinicId, type, year } },
-      update: { lastNumber: { increment: 1 } },
-      create: { clinicId, type, year, lastNumber: 1 },
-      select: { lastNumber: true },
-    });
-
-    const number = sequence.lastNumber.toString().padStart(6, '0');
-    return `${type}-${year}-${number}`;
-  }
-
   // ── SUGERENCIAS DE MEDICAMENTOS ────────────────────────────────────────────
 
-  /**
-   * Retorna medicamentos sugeridos para un array de códigos ICD-10.
-   * El sistema aprende con el uso: usageCount se incrementa cada vez
-   * que el médico acepta una sugerencia → sube en el ranking.
-   *
-   * Orden: priority ASC, usageCount DESC (menos priority = más importante)
-   */
   async getMedicationSuggestions(icd10Codes: string[]) {
     if (!icd10Codes.length) return [];
 
@@ -541,10 +543,9 @@ export class ConsultationsService {
         },
       },
       orderBy: [{ priority: 'asc' }, { usageCount: 'desc' }],
-      take: 15, // máximo 15 sugerencias para no saturar la UI
+      take: 15,
     });
 
-    // Deduplicar por medicamento si el mismo aparece para múltiples diagnósticos
     const seen = new Set<string>();
     return suggestions.filter((s) => {
       if (seen.has(s.medicationCatalog.id)) return false;
@@ -553,10 +554,48 @@ export class ConsultationsService {
     });
   }
 
+  // ── UTILIDADES PRIVADAS ────────────────────────────────────────────────────
+
+  private calculateBmi(
+    weightKg?: number,
+    heightCm?: number,
+    providedBmi?: number,
+  ): number | null {
+    if (providedBmi) return providedBmi;
+    if (weightKg && heightCm && heightCm > 0) {
+      const heightM = heightCm / 100;
+      return Math.round((weightKg / (heightM * heightM)) * 10) / 10;
+    }
+    return null;
+  }
+
   /**
-   * Aplica Lazy Registration: Si envían patientId, lo valida.
-   * Si envían el objeto patient, lo busca por similitud o lo crea.
+   * Obtiene el siguiente folio para consultas (CON-YYYY-NNNNNN)
+   * basándose únicamente en el máximo real de la tabla.
    */
+  private async getNextConsultationFolio(
+    tx: Prisma.TransactionClient,
+  ): Promise<string> {
+    const year = new Date().getFullYear();
+    const prefix = `CON-${year}-`;
+
+    const last = await tx.consultation.findFirst({
+      where: { folioNumber: { startsWith: prefix } },
+      orderBy: { folioNumber: 'desc' },
+      select: { folioNumber: true },
+    });
+
+    let nextNumber = 1;
+    if (last?.folioNumber) {
+      const numericPart = parseInt(last.folioNumber.slice(prefix.length), 10);
+      if (!isNaN(numericPart)) {
+        nextNumber = numericPart + 1;
+      }
+    }
+
+    return `${prefix}${nextNumber.toString().padStart(6, '0')}`;
+  }
+
   private async resolvePatient(dto: CreateConsultationDTO): Promise<string> {
     if (dto.patientId) {
       const patient = await this.prisma.patient.findUnique({
@@ -566,7 +605,6 @@ export class ConsultationsService {
       if (!patient) throw new NotFoundException('Paciente no encontrado');
       if (!patient.isActive)
         throw new BadRequestException('El paciente está inactivo');
-
       return patient.id;
     }
 
@@ -578,7 +616,6 @@ export class ConsultationsService {
 
     const normalize = (text: string) => text.trim().toUpperCase();
 
-    // Buscar duplicado básico
     const existingPatient = await this.prisma.patient.findFirst({
       where: {
         firstName: normalize(dto.patient.firstName),
@@ -590,7 +627,6 @@ export class ConsultationsService {
 
     if (existingPatient) return existingPatient.id;
 
-    // Crear "On-The-Fly"
     const newPatient = await this.prisma.patient.create({
       data: {
         firstName: normalize(dto.patient.firstName),

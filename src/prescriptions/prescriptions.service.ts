@@ -12,89 +12,27 @@ import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { CreatePrescriptionDTO } from './dto/create-prescription.dto';
 import { UpdatePrescriptionDTO } from './dto/update-prescription.dto';
 import { Prisma } from '@generated/prisma/client';
-
-// ── Select reutilizable ────────────────────────────────────────────────────────
-
-const PRESCRIPTION_DETAIL_SELECT = {
-  id: true,
-  folioNumber: true,
-  status: true,
-  doctorName: true,
-  doctorLicense: true,
-  doctorSpecialty: true,
-  clinicName: true,
-  clinicAddress: true,
-  clinicPhone: true,
-  pdfUrl: true,
-  pdfPublicId: true,
-  issuedAt: true,
-  expiresAt: true,
-  createdAt: true,
-  consultation: {
-    select: {
-      id: true,
-      folioNumber: true,
-      consultedAt: true,
-    },
-  },
-  patient: {
-    select: {
-      id: true,
-      firstName: true,
-      middleName: true,
-      lastNamePaternal: true,
-      lastNameMaternal: true,
-      birthDate: true,
-      gender: true,
-    },
-  },
-  items: {
-    select: {
-      id: true,
-      medicationName: true,
-      brandName: true,
-      dose: true,
-      frequency: true,
-      duration: true,
-      route: true,
-      quantity: true,
-      instructions: true,
-      sortOrder: true,
-      catalogId: true,
-      consultationDiagnosisId: true,
-    },
-    orderBy: {
-      sortOrder: 'asc',
-    } as Prisma.PrescriptionItemOrderByWithRelationInput,
-  },
-} satisfies Prisma.PrescriptionSelect;
-
-// ── Validez de receta (días) ───────────────────────────────────────────────────
-const PRESCRIPTION_VALIDITY_DAYS = 30;
+import { PdfService } from 'src/pdf/pdf.service';
+import {
+  PRESCRIPTION_DETAIL_SELECT,
+  PRESCRIPTION_VALIDITY_DAYS,
+  SELECT_PRESCRIPTION_ISSUE,
+} from './constants/prescription.select';
+import { PrescriptionTemplateProps } from 'src/pdf/templates/prescription';
 
 @Injectable()
 export class PrescriptionsService {
   private readonly logger = new Logger(PrescriptionsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly cloudinary: CloudinaryService,
+    private readonly pdfService: PdfService,
+    private readonly prisma: PrismaService,
   ) {}
 
   // ── CREAR ──────────────────────────────────────────────────────────────────
 
-  /**
-   * Crea una receta en estado DRAFT para una consulta.
-   *
-   * Flujo:
-   *   1. Validar que la consulta existe y no tiene receta aún
-   *   2. Obtener el snapshot del médico y consultorio
-   *   3. Generar folio REC-YYYY-NNNNNN
-   *   4. Crear Prescription + PrescriptionItems
-   *   5. Incrementar usageCount en IcdMedicationSuggestion si aplica
-   */
   async create(dto: CreatePrescriptionDTO) {
-    // 1. Validar consulta
     const consultation = await this.prisma.consultation.findUnique({
       where: { id: dto.consultationId },
       select: {
@@ -106,12 +44,7 @@ export class PrescriptionsService {
           select: {
             clinicId: true,
             clinic: {
-              select: {
-                name: true,
-                address: true,
-                phone: true,
-                logoUrl: true,
-              },
+              select: { name: true, address: true, phone: true, logoUrl: true },
             },
             doctorProfile: {
               select: {
@@ -141,7 +74,6 @@ export class PrescriptionsService {
       );
     }
 
-    // 2. Validar que hay ítems
     if (!dto.items?.length) {
       throw new BadRequestException(
         'La receta debe tener al menos un medicamento',
@@ -153,7 +85,6 @@ export class PrescriptionsService {
     const user = profile?.user;
     const clinic = dc?.clinic;
 
-    // Construir nombre completo del médico
     const doctorFullName = [
       user?.firstName,
       user?.middleName,
@@ -163,65 +94,86 @@ export class PrescriptionsService {
       .filter(Boolean)
       .join(' ');
 
-    // 3. Transacción: folio + receta + ítems
-    return this.prisma.$transaction(async (tx) => {
-      // 3a. Generar folio REC
-      const folio = await this.generateFolio(tx, dc.clinicId, 'REC');
+    // Datos base sin folio
+    const baseData = {
+      consultationId: dto.consultationId,
+      patientId: consultation.patientId,
+      doctorClinicId: consultation.doctorClinicId,
+      status: 'DRAFT' as const,
+      doctorName: profile?.fullTitle ?? doctorFullName,
+      doctorLicense: profile?.professionalLicense ?? '',
+      doctorSpecialty: profile?.specialty ?? null,
+      clinicName: clinic?.name ?? '',
+      clinicAddress: clinic?.address ?? null,
+      clinicPhone: clinic?.phone ?? null,
+      items: {
+        create: dto.items.map((item, index) => ({
+          catalogId: item.catalogId ?? null,
+          consultationDiagnosisId: item.consultationDiagnosisId ?? null,
+          medicationName: item.medicationName,
+          brandName: item.brandName ?? null,
+          dose: item.dose,
+          frequency: item.frequency,
+          duration: item.duration,
+          route: item.route ?? null,
+          quantity: item.quantity ?? null,
+          instructions: item.instructions ?? null,
+          sortOrder: item.sortOrder ?? index,
+        })),
+      },
+    };
 
-      // 3b. Calcular fecha de vencimiento
-      const issuedAt = new Date();
-      const expiresAt = new Date(issuedAt);
-      expiresAt.setDate(expiresAt.getDate() + PRESCRIPTION_VALIDITY_DAYS);
+    // Bucle de reintentos ante P2002
+    const MAX_RETRIES = 3;
 
-      // 3c. Crear receta con sus ítems
-      const prescription = await tx.prescription.create({
-        data: {
-          folioNumber: folio,
-          consultationId: dto.consultationId,
-          patientId: consultation.patientId,
-          doctorClinicId: consultation.doctorClinicId,
-          status: 'DRAFT',
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const folio = await this.getNextPrescriptionFolio();
 
-          // Snapshot del médico
-          doctorName: profile?.fullTitle ?? doctorFullName,
-          doctorLicense: profile?.professionalLicense ?? '',
-          doctorSpecialty: profile?.specialty ?? null,
+        const result = await this.prisma.$transaction(async (tx) => {
+          const issuedAt = new Date();
+          const expiresAt = new Date(issuedAt);
+          expiresAt.setDate(expiresAt.getDate() + PRESCRIPTION_VALIDITY_DAYS);
 
-          // Snapshot del consultorio
-          clinicName: clinic?.name ?? '',
-          clinicAddress: clinic?.address ?? null,
-          clinicPhone: clinic?.phone ?? null,
+          const prescription = await tx.prescription.create({
+            data: {
+              folioNumber: folio,
+              ...baseData,
+              issuedAt,
+              expiresAt,
+            },
+            select: PRESCRIPTION_DETAIL_SELECT,
+          });
 
-          issuedAt,
-          expiresAt,
+          return prescription;
+        });
 
-          // Ítems
-          items: {
-            create: dto.items.map((item, index) => ({
-              catalogId: item.catalogId ?? null,
-              consultationDiagnosisId: item.consultationDiagnosisId ?? null,
-              medicationName: item.medicationName,
-              brandName: item.brandName ?? null,
-              dose: item.dose,
-              frequency: item.frequency,
-              duration: item.duration,
-              route: item.route ?? null,
-              quantity: item.quantity ?? null,
-              instructions: item.instructions ?? null,
-              sortOrder: item.sortOrder ?? index,
-            })),
-          },
-        },
-        select: PRESCRIPTION_DETAIL_SELECT,
-      });
+        this.incrementSuggestionUsage(dto.items).catch((err) =>
+          this.logger.warn('Error incrementando usageCount:', err),
+        );
 
-      // 3d. Incrementar usageCount en sugerencias usadas (fire-and-forget)
-      this.incrementSuggestionUsage(dto.items).catch((err) =>
-        this.logger.warn('Error incrementando usageCount:', err),
-      );
+        return result;
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          if (attempt === MAX_RETRIES - 1) {
+            throw new ConflictException(
+              'Error de unicidad al crear la receta. Por favor, reintente.',
+            );
+          }
+          await new Promise((resolve) =>
+            setTimeout(resolve, 50 * (attempt + 1)),
+          );
+          continue;
+        }
+        this.logger.error('Error al crear receta:', err);
+        throw err;
+      }
+    }
 
-      return prescription;
-    });
+    throw new Error('No se pudo crear la receta después de varios intentos');
   }
 
   // ── DETALLE ────────────────────────────────────────────────────────────────
@@ -259,7 +211,7 @@ export class PrescriptionsService {
           select: { medicationName: true, dose: true, frequency: true },
           orderBy: {
             sortOrder: 'asc',
-          } as Prisma.PrescriptionItemOrderByWithRelationInput,
+          },
         },
       },
       orderBy: { issuedAt: 'desc' },
@@ -268,10 +220,6 @@ export class PrescriptionsService {
 
   // ── ACTUALIZAR ÍTEMS (solo en DRAFT) ──────────────────────────────────────
 
-  /**
-   * Reemplaza todos los ítems de una receta en DRAFT.
-   * Estrategia replace-all: más simple y predecible para el frontend.
-   */
   async update(id: string, dto: UpdatePrescriptionDTO) {
     const prescription = await this.prisma.prescription.findUnique({
       where: { id },
@@ -291,10 +239,8 @@ export class PrescriptionsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // Eliminar ítems anteriores
       await tx.prescriptionItem.deleteMany({ where: { prescriptionId: id } });
 
-      // Crear nuevos ítems
       await tx.prescriptionItem.createMany({
         data: dto.items!.map((item, index) => ({
           prescriptionId: id,
@@ -321,33 +267,69 @@ export class PrescriptionsService {
 
   // ── EMITIR RECETA (DRAFT → ISSUED) ────────────────────────────────────────
 
-  /**
-   * Marca la receta como ISSUED.
-   * En la Fase 5 aquí se generará el PDF y se subirá a Cloudinary.
-   * Por ahora devuelve la receta con los datos para que el frontend
-   * pueda renderizar su propia vista de impresión.
-   */
-  async issue(id: string) {
+  async issue(id: string, includeSignature = true) {
     const prescription = await this.prisma.prescription.findUnique({
       where: { id },
-      select: { id: true, status: true, items: { select: { id: true } } },
+      select: SELECT_PRESCRIPTION_ISSUE,
     });
+
     if (!prescription) throw new NotFoundException('Receta no encontrada');
-    if (prescription.status === 'ISSUED') {
+    if (prescription.status === 'ISSUED')
       throw new ConflictException('La receta ya fue emitida');
-    }
-    if (prescription.status === 'CANCELLED') {
+    if (prescription.status === 'CANCELLED')
       throw new BadRequestException('No se puede emitir una receta cancelada');
-    }
-    if (!prescription.items.length) {
+    if (!prescription.items.length)
       throw new BadRequestException(
         'No se puede emitir una receta sin medicamentos',
       );
-    }
+
+    // Calcular edad
+    const birthDate = prescription.patient.birthDate;
+    const age = new Date().getFullYear() - new Date(birthDate).getFullYear();
+
+    const patientName = [
+      prescription.patient.firstName,
+      prescription.patient.middleName,
+      prescription.patient.lastNamePaternal,
+      prescription.patient.lastNameMaternal,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const diagnosesSummary =
+      prescription.consultation?.diagnoses
+        .map((d) => [d.icd10Code, d.description].filter(Boolean).join(' — '))
+        .join('\n') || null;
+
+    const props: PrescriptionTemplateProps = {
+      clinicName: prescription.clinicName,
+      clinicAddress: prescription.clinicAddress,
+      clinicPhone: prescription.clinicPhone,
+      clinicLogoUrl: prescription.doctorClinic?.clinic?.logoUrl ?? null,
+      doctorName: prescription.doctorName,
+      doctorLicense: prescription.doctorLicense,
+      doctorSpecialty: prescription.doctorSpecialty,
+      doctorSignatureUrl:
+        prescription.doctorClinic?.doctorProfile?.signatureUrl ?? null,
+      includeSignature,
+      patientName,
+      patientAge: age,
+      patientGender: prescription.patient.gender,
+      folioNumber: prescription.folioNumber,
+      issuedAt: prescription.issuedAt.toISOString(),
+      expiresAt: prescription.expiresAt.toISOString(),
+      items: prescription.items,
+      patientInstructions:
+        prescription.consultation?.patientInstructions ?? null,
+      diagnosesSummary,
+    };
+
+    const pdfBuffer = await this.pdfService.generatePrescription(props);
+    const { pdfUrl } = await this.savePdf(id, pdfBuffer);
 
     return this.prisma.prescription.update({
       where: { id },
-      data: { status: 'ISSUED' },
+      data: { status: 'ISSUED', pdfUrl },
       select: PRESCRIPTION_DETAIL_SELECT,
     });
   }
@@ -371,7 +353,7 @@ export class PrescriptionsService {
     });
   }
 
-  // ── GUARDAR PDF (llamado desde PrescriptionsPdfService en Fase 5) ──────────
+  // ── GUARDAR PDF ────────────────────────────────────────────────────────────
 
   async savePdf(id: string, pdfBuffer: Buffer): Promise<{ pdfUrl: string }> {
     const prescription = await this.prisma.prescription.findUnique({
@@ -380,16 +362,16 @@ export class PrescriptionsService {
     });
     if (!prescription) throw new NotFoundException('Receta no encontrada');
 
-    // Eliminar PDF anterior si existe
     if (prescription.pdfPublicId) {
       await this.cloudinary.deleteByPublicId(prescription.pdfPublicId);
     }
 
-    const publicId = `medisys/prescriptions/${id}`;
+    const publicId = id;
     const result = await this.cloudinary.uploadStream(
       pdfBuffer,
       'medisys/prescriptions',
       publicId,
+      'raw',
     );
 
     await this.prisma.prescription.update({
@@ -404,24 +386,31 @@ export class PrescriptionsService {
     return { pdfUrl: result.secure_url };
   }
 
-  // ── HELPERS PRIVADOS ───────────────────────────────────────────────────────
+  // ── UTILIDADES PRIVADAS ────────────────────────────────────────────────────
 
-  private async generateFolio(
-    tx: Prisma.TransactionClient,
-    clinicId: string,
-    type: 'CON' | 'REC',
-  ): Promise<string> {
+  /**
+   * Obtiene el siguiente folio para recetas (REC-YYYY-NNNNNN)
+   * basándose únicamente en el máximo real de la tabla.
+   */
+  private async getNextPrescriptionFolio(): Promise<string> {
     const year = new Date().getFullYear();
+    const prefix = `REC-${year}-`;
 
-    const sequence = await tx.folioSequence.upsert({
-      where: { clinicId_type_year: { clinicId, type, year } },
-      update: { lastNumber: { increment: 1 } },
-      create: { clinicId, type, year, lastNumber: 1 },
-      select: { lastNumber: true },
+    const last = await this.prisma.prescription.findFirst({
+      where: { folioNumber: { startsWith: prefix } },
+      orderBy: { folioNumber: 'desc' },
+      select: { folioNumber: true },
     });
 
-    const number = sequence.lastNumber.toString().padStart(6, '0');
-    return `${type}-${year}-${number}`;
+    let nextNumber = 1;
+    if (last?.folioNumber) {
+      const numericPart = parseInt(last.folioNumber.slice(prefix.length), 10);
+      if (!isNaN(numericPart)) {
+        nextNumber = numericPart + 1;
+      }
+    }
+
+    return `${prefix}${nextNumber.toString().padStart(6, '0')}`;
   }
 
   /**

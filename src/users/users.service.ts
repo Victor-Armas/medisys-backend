@@ -122,6 +122,7 @@ export class UsersService {
       buffer,
       'medisys/doctors/photos',
       publicId,
+      'image',
     );
 
     await this.prisma.user.update({

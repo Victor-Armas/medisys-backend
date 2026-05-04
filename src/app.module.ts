@@ -16,6 +16,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { ConsultationsModule } from './consultations/consultations.module';
 import { PrescriptionsModule } from './prescriptions/prescriptions.module';
+import { PdfModule } from './pdf/pdf.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { PrescriptionsModule } from './prescriptions/prescriptions.module';
     //── Fase 4 y 5 ────────────────────────────────────────────────
     ConsultationsModule,
     PrescriptionsModule,
+    PdfModule,
   ],
   providers: [
     // Aplica ThrottlerGuard a TODOS los endpoints de la app

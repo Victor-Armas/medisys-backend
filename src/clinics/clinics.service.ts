@@ -92,6 +92,37 @@ export class ClinicsService {
     return [];
   }
 
+  async findMyDoctorClinics(userId: string) {
+    const items = await this.prisma.doctorClinic.findMany({
+      where: {
+        doctorProfile: { userId },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        isPrimary: true,
+        clinic: { select: { name: true } },
+        doctorProfile: {
+          select: {
+            user: { select: { firstName: true, lastNamePaternal: true } },
+          },
+        },
+      },
+    });
+    return items.map((dc) => ({
+      id: dc.id,
+      clinicName: dc.clinic.name,
+      doctorName: [
+        dc.doctorProfile.user.firstName,
+        dc.doctorProfile.user.lastNamePaternal,
+      ]
+        .filter(Boolean)
+        .join(' '),
+      isPrimary: dc.isPrimary,
+      isActive: true,
+    }));
+  }
+
   // ─────────────────────────────────────────────────────────────
   // LISTAR consultorios para agendamiento (Público)
   // Todos los roles ven todas las clínicas activas
@@ -707,6 +738,7 @@ export class ClinicsService {
       buffer,
       'medisys/clinics/logos',
       publicId,
+      'image',
     );
 
     await this.prisma.clinic.update({

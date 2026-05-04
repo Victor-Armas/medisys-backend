@@ -47,4 +47,7 @@ export class ListConsultationsDTO {
   @Min(1)
   @Type(() => Number)
   limit?: number = 20;
+
+  @IsOptional()
+  search?: string;
 }

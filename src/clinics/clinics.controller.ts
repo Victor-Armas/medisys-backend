@@ -58,6 +58,13 @@ export class ClinicsController {
     return this.clinicsService.findAll(req.user.role, req.user.id);
   }
 
+  // GET /api/clinics/me
+  @Get('me')
+  @Roles('MAIN_DOCTOR', 'DOCTOR')
+  findAllMe(@Req() req: RequestWithUser) {
+    return this.clinicsService.findMyDoctorClinics(req.user.id);
+  }
+
   // GET /api/clinics/:id
   @Get(':id')
   @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR', 'RECEPTIONIST')

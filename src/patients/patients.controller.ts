@@ -60,6 +60,23 @@ export class PatientsController {
     });
   }
 
+  @Get('search/clinical')
+  @Roles(...ALL_STAFF)
+  searchClinical(
+    @Query('clinicId') clinicId?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.patientsService.findAll({
+      clinicId,
+      search,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+      includeAllergies: true, // 👈 aquí activas el extra
+    });
+  }
+
   // ── GET /api/patients/:id — Detalle del paciente ──────────────────────────
   @Get(':id')
   @Roles(...ALL_STAFF)

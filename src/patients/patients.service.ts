@@ -14,7 +14,9 @@ import {
   PATIENT_DETAIL_SELECT,
   MEDICAL_HISTORY_SELECT,
   ADDRESS_SELECT,
+  ALLERGY_SELECT,
 } from './constants/patient.select';
+import { Prisma } from '@generated/prisma/browser';
 
 @Injectable()
 export class PatientsService {
@@ -74,8 +76,15 @@ export class PatientsService {
     search?: string;
     page?: number;
     limit?: number;
+    includeAllergies?: boolean;
   }) {
-    const { clinicId, search, page = 1, limit = 20 } = options;
+    const {
+      clinicId,
+      search,
+      page = 1,
+      limit = 20,
+      includeAllergies,
+    } = options;
     const skip = (page - 1) * limit;
 
     const where: any = { isActive: true };
@@ -96,10 +105,21 @@ export class PatientsService {
       ];
     }
 
+    const select: Prisma.PatientSelect = {
+      ...PATIENT_LIST_SELECT,
+      ...(includeAllergies && {
+        allergies: {
+          where: { isActive: true },
+          select: ALLERGY_SELECT,
+          orderBy: [{ severity: 'desc' }, { createdAt: 'asc' }],
+        },
+      }),
+    };
+
     const [patients, total] = await Promise.all([
       this.prisma.patient.findMany({
         where,
-        select: PATIENT_LIST_SELECT,
+        select,
         orderBy: { lastNamePaternal: 'asc' },
         skip,
         take: limit,

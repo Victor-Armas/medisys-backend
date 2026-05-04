@@ -293,7 +293,6 @@ model Clinic {
   // Relaciones
   doctorClinics  DoctorClinic[]                      // Médicos asignados a este consultorio
   patients      PatientClinic[]
-  folioSequences  FolioSequence[]
 
 }
 
@@ -1136,8 +1135,6 @@ model IcdMedicationSuggestion {
 
 model FolioSequence {
   id          String   @id @default(uuid())
-  clinicId    String
-  clinic      Clinic   @relation(fields: [clinicId], references: [id])
 
   // Tipo de documento: CON = consulta, REC = receta, APT = cita (si se necesita)
   type        String   // "CON" | "REC"
@@ -1146,6 +1143,6 @@ model FolioSequence {
 
   updatedAt   DateTime @updatedAt
 
-  @@unique([clinicId, type, year])
+  @@unique([type, year])
   @@map("folio_sequences")
 }

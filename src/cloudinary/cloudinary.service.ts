@@ -26,6 +26,7 @@ export class CloudinaryService {
     buffer: Buffer,
     folder: CloudinaryFolder,
     publicId: string,
+    resource_type: 'image' | 'raw',
   ): Promise<UploadApiResponse> {
     return new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
@@ -33,9 +34,7 @@ export class CloudinaryService {
           folder,
           public_id: publicId,
           overwrite: true,
-          // 'auto' detecta PDF vs imagen automáticamente.
-          // Con 'image' los PDFs son rechazados.
-          resource_type: 'auto',
+          resource_type,
           image_metadata: false,
         },
         (error, result) => {

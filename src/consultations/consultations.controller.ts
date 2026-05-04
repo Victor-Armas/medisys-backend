@@ -1,5 +1,3 @@
-// src/consultations/consultations.controller.ts
-
 import {
   Body,
   Controller,
@@ -13,8 +11,10 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@auth/guards/roles.guard';
@@ -27,6 +27,8 @@ import {
 } from './dto/create-consultation.dto';
 import { UpdateConsultationDTO } from './dto/update-consultation.dto';
 import { ListConsultationsDTO } from './dto/list-consultations.dto';
+import { PdfService } from 'src/pdf/pdf.service';
+import { ConsultationNoteTemplateProps } from 'src/pdf/templates/consultation-note';
 
 // Solo personal clínico accede al expediente
 const CLINICAL = ['ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR'] as const;
@@ -41,7 +43,10 @@ const ALL_STAFF = [
 @Controller('consultations')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ConsultationsController {
-  constructor(private readonly consultationsService: ConsultationsService) {}
+  constructor(
+    private readonly consultationsService: ConsultationsService,
+    private readonly pdfService: PdfService,
+  ) {}
 
   /**
    * POST /api/consultations
@@ -63,6 +68,18 @@ export class ConsultationsController {
   @Roles(...ALL_STAFF)
   findAll(@Query() query: ListConsultationsDTO, @Req() req: RequestWithUser) {
     return this.consultationsService.findAll(query, req.user.id, req.user.role);
+  }
+
+  /**
+   * GET /api/consultations/suggestions?icd10=J00&icd10=E11
+   * Retorna medicamentos sugeridos para uno o varios códigos ICD-10.
+   * Ordenados por prioridad + usageCount (aprendizaje con el uso).
+   */
+  @Get('suggestions')
+  @Roles(...CLINICAL)
+  getSuggestions(@Query('icd10') icd10: string | string[]) {
+    const codes = Array.isArray(icd10) ? icd10 : [icd10].filter(Boolean);
+    return this.consultationsService.getMedicationSuggestions(codes);
   }
 
   /**
@@ -150,15 +167,65 @@ export class ConsultationsController {
     );
   }
 
-  /**
-   * GET /api/consultations/suggestions?icd10=J00&icd10=E11
-   * Retorna medicamentos sugeridos para uno o varios códigos ICD-10.
-   * Ordenados por prioridad + usageCount (aprendizaje con el uso).
-   */
-  @Get('suggestions')
+  @Get(':id/pdf')
   @Roles(...CLINICAL)
-  getSuggestions(@Query('icd10') icd10: string | string[]) {
-    const codes = Array.isArray(icd10) ? icd10 : [icd10].filter(Boolean);
-    return this.consultationsService.getMedicationSuggestions(codes);
+  async generateNotePdf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('signature') signature: string,
+    @Res() res: Response,
+    @Req() req: RequestWithUser,
+  ) {
+    const c = await this.consultationsService.findOne(
+      id,
+      req.user.id,
+      req.user.role,
+    );
+    const doctor = c.doctorClinic.doctorProfile.user;
+    const clinic = c.doctorClinic.clinic;
+
+    const age =
+      new Date().getFullYear() - new Date(c.patient.birthDate).getFullYear();
+
+    const props: ConsultationNoteTemplateProps = {
+      clinicName: clinic?.name ?? 'Consultorio',
+      clinicAddress: clinic?.address ?? null,
+      clinicPhone: clinic?.phone ?? null,
+      clinicLogoUrl: clinic?.logoUrl ?? null,
+      doctorName: `${doctor.firstName} ${doctor.lastNamePaternal}`,
+      doctorLicense: c.doctorClinic.doctorProfile.professionalLicense ?? '',
+      doctorSpecialty: c.doctorClinic.doctorProfile.specialty ?? null,
+      doctorSignatureUrl: c.doctorClinic.doctorProfile.signatureUrl ?? null,
+      includeSignature: signature === 'true',
+      patientName: `${c.patient.firstName} ${c.patient.lastNamePaternal}`,
+      patientAge: age,
+      patientGender: c.patient.gender,
+      patientCurp: c.patient.curp ?? null,
+      patientBloodType: c.patient.bloodType ?? null,
+      patientAllergies: c.patient.allergies?.map((a) => a.substance) ?? [],
+      folioNumber: c.folioNumber,
+      consultedAt: c.consultedAt.toISOString(),
+      consultationType: c.consultationType,
+      reasonForVisit: c.reasonForVisit,
+      currentCondition: c.currentCondition ?? '',
+      physicalExamFindings: c.physicalExamFindings ?? null,
+      labResultsSummary: c.labResultsSummary ?? null,
+      clinicalImpressions: c.clinicalImpressions ?? null,
+      treatmentPlan: c.treatmentPlan ?? null,
+      patientInstructions: c.patientInstructions ?? null,
+      prognosis: c.prognosis ?? null,
+      requiresFollowUp: c.requiresFollowUp ?? false,
+      followUpDays: c.followUpDays ?? null,
+      vitalSigns: c.vitalSigns ?? null,
+      diagnoses: c.diagnoses,
+    };
+
+    const buffer = await this.pdfService.generateConsultationNote(props);
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="nota-${c.folioNumber}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 }

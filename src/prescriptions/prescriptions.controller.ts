@@ -8,14 +8,12 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
-  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@auth/guards/roles.guard';
 import { Roles } from '@auth/decorators/roles.decorator';
-import { RequestWithUser } from '@auth/auth.controller';
 import { PrescriptionsService } from './prescriptions.service';
 import { CreatePrescriptionDTO } from './dto/create-prescription.dto';
 import { UpdatePrescriptionDTO } from './dto/update-prescription.dto';
@@ -41,7 +39,7 @@ export class PrescriptionsController {
    */
   @Post()
   @Roles(...CLINICAL)
-  create(@Body() dto: CreatePrescriptionDTO, @Req() _req: RequestWithUser) {
+  create(@Body() dto: CreatePrescriptionDTO) {
     return this.prescriptionsService.create(dto);
   }
 
@@ -85,8 +83,11 @@ export class PrescriptionsController {
    */
   @Post(':id/issue')
   @Roles(...CLINICAL)
-  issue(@Param('id', ParseUUIDPipe) id: string) {
-    return this.prescriptionsService.issue(id);
+  issue(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('includeSignature') includeSignature?: boolean,
+  ) {
+    return this.prescriptionsService.issue(id, includeSignature ?? true);
   }
 
   /**

@@ -160,47 +160,39 @@ export class CreateConsultationDTO {
   // ── Sección I: Motivo y padecimiento ───────────────────────────────────────
   @IsString()
   @IsNotEmpty({ message: 'El motivo de consulta es obligatorio' })
-  @MaxLength(2000)
   reasonForVisit: string;
 
   @IsString()
   @IsNotEmpty({ message: 'El padecimiento actual es obligatorio' })
-  @MaxLength(5000)
   currentCondition: string;
 
   // ── Sección II: Exploración física ─────────────────────────────────────────
   @IsOptional()
   @IsString()
-  @MaxLength(5000)
   physicalExamFindings?: string;
 
   // ── Sección III: Estudios auxiliares ───────────────────────────────────────
   @IsOptional()
   @IsString()
-  @MaxLength(3000)
   labResultsSummary?: string;
 
   // ── Sección IV: Diagnóstico ─────────────────────────────────────────────────
   @IsOptional()
   @IsString()
-  @MaxLength(3000)
   clinicalImpressions?: string;
 
   // ── Sección V: Tratamiento ──────────────────────────────────────────────────
   @IsOptional()
   @IsString()
-  @MaxLength(3000)
   treatmentPlan?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(3000)
   patientInstructions?: string;
 
   // ── Sección VI: Pronóstico ──────────────────────────────────────────────────
   @IsOptional()
   @IsString()
-  @MaxLength(1000)
   prognosis?: string;
 
   // ── Seguimiento ─────────────────────────────────────────────────────────────
@@ -210,13 +202,10 @@ export class CreateConsultationDTO {
 
   @IsOptional()
   @IsInt()
-  @Min(1)
-  @Max(365)
   followUpDays?: number;
 
   @IsOptional()
   @IsString()
-  @MaxLength(500)
   followUpNotes?: string;
 
   // ── Sub-documentos ───────────────────────────────────────────────────────────
