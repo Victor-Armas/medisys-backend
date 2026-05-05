@@ -11,6 +11,7 @@ export const ADDRESS_SELECT = {
   intNumber: true,
   postalCode: {
     select: {
+      id: true,
       code: true,
       municipality: {
         select: {

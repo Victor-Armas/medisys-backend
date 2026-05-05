@@ -58,7 +58,6 @@ export class MedicalFilesService {
       file.buffer,
       folder,
       publicId,
-      'raw',
     );
 
     // 4. Persistir en DB

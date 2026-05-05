@@ -8,6 +8,10 @@ import {
   ConsultationNoteTemplate,
   ConsultationNoteTemplateProps,
 } from './templates/consultation-note';
+import {
+  MedicalHistoryPDFProps,
+  MedicalHistoryTemplate,
+} from './templates/medical-history';
 
 @Injectable()
 export class PdfService {
@@ -27,6 +31,11 @@ export class PdfService {
     props: ConsultationNoteTemplateProps,
   ): Promise<Buffer> {
     const element = <ConsultationNoteTemplate {...props} />;
+    return Buffer.from(await renderToBuffer(element));
+  }
+
+  async generateMedicalHistory(props: MedicalHistoryPDFProps): Promise<Buffer> {
+    const element = <MedicalHistoryTemplate {...props} />;
     return Buffer.from(await renderToBuffer(element));
   }
 }

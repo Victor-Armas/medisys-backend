@@ -349,7 +349,6 @@ export class DoctorsService {
       buffer,
       'medisys/doctors/signatures',
       publicId,
-      'image',
     );
 
     await this.prisma.doctorProfile.update({

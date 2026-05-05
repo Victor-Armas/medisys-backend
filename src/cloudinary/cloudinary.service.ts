@@ -26,7 +26,6 @@ export class CloudinaryService {
     buffer: Buffer,
     folder: CloudinaryFolder,
     publicId: string,
-    resource_type: 'image' | 'raw',
   ): Promise<UploadApiResponse> {
     return new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
@@ -34,7 +33,7 @@ export class CloudinaryService {
           folder,
           public_id: publicId,
           overwrite: true,
-          resource_type,
+          resource_type: 'auto',
           image_metadata: false,
         },
         (error, result) => {

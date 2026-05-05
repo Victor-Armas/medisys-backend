@@ -17,10 +17,15 @@ import {
   ALLERGY_SELECT,
 } from './constants/patient.select';
 import { Prisma } from '@generated/prisma/browser';
+import { MedicalHistoryPDFProps } from 'src/pdf/templates/medical-history';
+import { PdfService } from 'src/pdf/pdf.service';
 
 @Injectable()
 export class PatientsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly pdfService: PdfService,
+  ) {}
 
   // ─── CREATE ───────────────────────────────────────────────────────────────
 
@@ -310,6 +315,106 @@ export class PatientsService {
     return this.prisma.patientClinic.create({
       data: { patientId, clinicId, isActive: true },
     });
+  }
+
+  async generateRecordPdf(patientId: string): Promise<Buffer> {
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+      include: {
+        conditions: { where: { isActive: true } },
+        medications: { where: { isActive: true } },
+        allergies: { where: { isActive: true } },
+        medicalHistory: true,
+      },
+    });
+
+    if (!patient) throw new NotFoundException('Paciente no encontrado');
+
+    const age =
+      new Date().getFullYear() - new Date(patient.birthDate).getFullYear();
+    const patientName = [
+      patient.firstName,
+      patient.middleName,
+      patient.lastNamePaternal,
+      patient.lastNameMaternal,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const HABIT_ES: Record<string, string> = {
+      NEVER: 'Nunca',
+      FORMER: 'Anteriormente',
+      CURRENT: 'Activo',
+      UNKNOWN: 'Desconocido',
+    };
+
+    const props: MedicalHistoryPDFProps = {
+      patientName,
+      patientAge: age,
+      patientGender: patient.gender,
+      patientCurp: patient.curp,
+      patientBloodType: patient.bloodType,
+      patientPhone: patient.phone,
+      patientBirthDate: patient.birthDate.toISOString(),
+      clinicName: 'MediSys',
+      generatedAt: new Date().toLocaleDateString('es-MX', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      }),
+      allergies: patient.allergies.map((a) => ({
+        substance: a.substance,
+        severity: a.severity,
+      })),
+      diseases: patient.conditions
+        .filter((c) => c.category === 'DISEASE' && c.type === 'PATHOLOGICAL')
+        .map((c) => ({ icd10Code: c.icd10Code, description: c.description })),
+      surgeries: patient.conditions
+        .filter((c) => c.category === 'SURGERY')
+        .map((c) => ({ description: c.description })),
+      trauma: patient.conditions
+        .filter((c) => c.category === 'TRAUMA')
+        .map((c) => ({ description: c.description })),
+      hospitalizations: patient.conditions
+        .filter((c) => c.category === 'HOSPITALIZATION')
+        .map((c) => ({ description: c.description })),
+      familyHistory: patient.conditions
+        .filter((c) => c.type === 'FAMILY')
+        .map((c) => ({
+          familyMember: c.familyMember ?? 'OTHER',
+          description: c.description,
+          icd10Code: c.icd10Code,
+        })),
+      medications: patient.medications.map((m) => ({
+        name: m.name,
+        dose: m.dose,
+        frequency: m.frequency,
+      })),
+      smoking: HABIT_ES[patient.medicalHistory?.smoking ?? 'UNKNOWN'],
+      alcoholUse: HABIT_ES[patient.medicalHistory?.alcoholUse ?? 'UNKNOWN'],
+      drugUse: HABIT_ES[patient.medicalHistory?.drugUse ?? 'UNKNOWN'],
+      bloodTransfusions: patient.medicalHistory?.bloodTransfusions ?? false,
+      pets: patient.medicalHistory?.pets ?? false,
+      tattoos: patient.medicalHistory?.tattoos ?? false,
+      woodSmokeExposure: patient.medicalHistory?.woodSmokeExposure ?? false,
+      immunizations: patient.medicalHistory?.immunizations,
+      physicalActivity: patient.medicalHistory?.physicalActivity,
+      gynecological:
+        patient.gender !== 'MALE' && patient.medicalHistory
+          ? {
+              menarche: patient.medicalHistory.menarche,
+              menstrualCycle: patient.medicalHistory.menstrualCycle,
+              gestations: patient.medicalHistory.gestations,
+              deliveries: patient.medicalHistory.deliveries,
+              caesareans: patient.medicalHistory.caesareans,
+              abortions: patient.medicalHistory.abortions,
+              contraceptiveMethod: patient.medicalHistory.contraceptiveMethod,
+              menopause: patient.medicalHistory.menopause,
+            }
+          : null,
+    };
+
+    return this.pdfService.generateMedicalHistory(props);
   }
 
   // ─── PRIVATE HELPERS ──────────────────────────────────────────────────────

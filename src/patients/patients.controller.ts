@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
@@ -18,6 +19,8 @@ import { CreatePatientDTO } from './dto/create-patient.dto';
 import { UpdatePatientDTO } from './dto/update-patient.dto';
 import { CreateMedicalHistoryDTO } from './dto/create-medical-history.dto';
 import { CreatePatientAddressDTO } from './dto/create-patient-address.dto';
+import { PdfService } from 'src/pdf/pdf.service';
+import { Response } from 'express';
 
 // Todos los roles de staff tienen acceso a los pacientes.
 // La diferencia entre roles se aplica en el servicio donde sea necesario.
@@ -34,7 +37,10 @@ const ADMIN = ['ADMIN_SYSTEM', 'MAIN_DOCTOR'] as const;
 @Controller('patients')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class PatientsController {
-  constructor(private patientsService: PatientsService) {}
+  constructor(
+    private patientsService: PatientsService,
+    private readonly pdfService: PdfService,
+  ) {}
 
   // ── POST /api/patients — Crear paciente (recepción o médico) ──────────────
   @Post()
@@ -151,5 +157,20 @@ export class PatientsController {
     @Body('clinicId') clinicId: string,
   ) {
     return this.patientsService.assignToClinic(id, clinicId);
+  }
+
+  @Get(':id/record-pdf')
+  @Roles(...ALL_STAFF)
+  async generateRecordPdf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.patientsService.generateRecordPdf(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="expediente-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 }

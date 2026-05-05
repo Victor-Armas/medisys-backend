@@ -738,7 +738,6 @@ export class ClinicsService {
       buffer,
       'medisys/clinics/logos',
       publicId,
-      'image',
     );
 
     await this.prisma.clinic.update({

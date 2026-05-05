@@ -371,7 +371,6 @@ export class PrescriptionsService {
       pdfBuffer,
       'medisys/prescriptions',
       publicId,
-      'raw',
     );
 
     await this.prisma.prescription.update({
