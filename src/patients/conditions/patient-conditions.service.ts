@@ -23,7 +23,7 @@ export class PatientConditionsService {
         type: dto.type ?? ConditionType.PATHOLOGICAL,
         familyMember: dto.familyMember ?? null,
         notes: dto.notes ?? null,
-        isNonCoded: !dto.icd10Code,
+        isNonCoded: dto.isNonCoded ?? !dto.icd10Code,
       },
       select: CONDITION_SELECT,
     });

@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export enum MedicalFileCategory {
   LAB_RESULTS = 'LAB_RESULTS', // Resultados de laboratorio
@@ -18,4 +18,9 @@ export class CreateMedicalFileDTO {
   @IsString()
   @MaxLength(200)
   description?: string;
+
+  /** Optional: link file to an existing consultation for timeline grouping */
+  @IsOptional()
+  @IsUUID()
+  consultationId?: string;
 }

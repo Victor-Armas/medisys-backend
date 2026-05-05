@@ -16,6 +16,7 @@ import {
 } from './dto/create-consultation.dto';
 import { UpdateConsultationDTO } from './dto/update-consultation.dto';
 import { ListConsultationsDTO } from './dto/list-consultations.dto';
+import { ConsultationTimelineQueryDTO } from './dto/consultation-timeline.dto';
 import {
   CONSULTATION_LIST_SELECT,
   CONSULTATION_DETAIL_SELECT,
@@ -302,6 +303,70 @@ export class ConsultationsService {
       where,
       select: CONSULTATION_LIST_SELECT,
       orderBy: { consultedAt: 'desc' },
+    });
+  }
+
+  // ── TIMELINE (CONSULTAS + ARCHIVOS) ─────────────────────────────────────────
+
+  async findTimelineByPatient(
+    patientId: string,
+    query: ConsultationTimelineQueryDTO,
+    requestingUserId: string,
+    userRole: string,
+  ) {
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { id: true },
+    });
+    if (!patient) throw new NotFoundException('Paciente no encontrado');
+
+    const where: Prisma.ConsultationWhereInput = { patientId };
+
+    if (userRole === 'DOCTOR') {
+      where.doctorClinic = {
+        doctorProfile: { userId: requestingUserId },
+      };
+    }
+
+    if (query.consultationId) {
+      where.id = query.consultationId;
+    }
+
+    return this.prisma.consultation.findMany({
+      where,
+      orderBy: { consultedAt: 'desc' },
+      select: {
+        id: true,
+        folioNumber: true,
+        consultationType: true,
+        reasonForVisit: true,
+        consultedAt: true,
+        doctorClinic: {
+          select: {
+            doctorProfile: {
+              select: {
+                user: { select: { id: true, firstName: true, lastNamePaternal: true } },
+              },
+            },
+            clinic: { select: { id: true, name: true } },
+          },
+        },
+        medicalFiles: {
+          select: {
+            id: true,
+            consultationId: true,
+            category: true,
+            description: true,
+            fileName: true,
+            fileUrl: true,
+            mimeType: true,
+            fileSize: true,
+            uploadedById: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
     });
   }
 

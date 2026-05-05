@@ -27,6 +27,7 @@ import {
 } from './dto/create-consultation.dto';
 import { UpdateConsultationDTO } from './dto/update-consultation.dto';
 import { ListConsultationsDTO } from './dto/list-consultations.dto';
+import { ConsultationTimelineQueryDTO } from './dto/consultation-timeline.dto';
 import { PdfService } from 'src/pdf/pdf.service';
 import { ConsultationNoteTemplateProps } from 'src/pdf/templates/consultation-note';
 
@@ -104,6 +105,25 @@ export class ConsultationsController {
   ) {
     return this.consultationsService.findByPatient(
       patientId,
+      req.user.id,
+      req.user.role,
+    );
+  }
+
+  /**
+   * GET /api/consultations/patient/:patientId/timeline
+   * Timeline: consultations + medical files linked to each consultation.
+   */
+  @Get('patient/:patientId/timeline')
+  @Roles(...ALL_STAFF)
+  timelineByPatient(
+    @Param('patientId', ParseUUIDPipe) patientId: string,
+    @Query() query: ConsultationTimelineQueryDTO,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.consultationsService.findTimelineByPatient(
+      patientId,
+      query,
       req.user.id,
       req.user.role,
     );

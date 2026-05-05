@@ -98,6 +98,7 @@ export const ALLERGY_SELECT = {
 // ── Medical file select ───────────────────────────────────────────────────────
 export const MEDICAL_FILE_SELECT = {
   id: true,
+  consultationId: true,
   category: true,
   description: true,
   fileName: true,

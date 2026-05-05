@@ -1,5 +1,6 @@
 // src/patients/conditions/dto/create-condition.dto.ts
 import {
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -19,6 +20,14 @@ export class CreateConditionDTO {
   @IsString()
   @MaxLength(10)
   icd10Code?: string;
+
+  /**
+   * When true, the entry is a free-text condition not linked to ICD-10.
+   * Optional: backend can derive it from the absence of icd10Code.
+   */
+  @IsOptional()
+  @IsBoolean()
+  isNonCoded?: boolean;
 
   /**
    * Human-readable name.

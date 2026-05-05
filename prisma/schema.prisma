@@ -530,6 +530,10 @@ model PatientMedicalFile {
   patientId   String
   patient     Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  /// Optional link to the consultation where the file was uploaded
+  consultationId String?
+  consultation   Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+
   category    MedicalFileCategory @default(OTHER)
   description String?             // Texto libre: "Biometría hemática 12/04/2025"
   fileName    String              // Nombre original del archivo
@@ -545,6 +549,7 @@ model PatientMedicalFile {
 
   @@index([patientId, category])
   @@index([patientId, createdAt])
+  @@index([consultationId])
 }
 
 
@@ -869,6 +874,7 @@ model Consultation {
   vitalSigns      VitalSigns?
   diagnoses       ConsultationDiagnosis[]
   prescription    Prescription?
+  medicalFiles    PatientMedicalFile[]
 
   @@index([patientId, consultedAt])
   @@index([doctorClinicId, consultedAt])

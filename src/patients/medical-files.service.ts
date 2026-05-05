@@ -60,10 +60,27 @@ export class MedicalFilesService {
       publicId,
     );
 
-    // 4. Persistir en DB
+    // 4. Optional: validate consultation linkage
+    let consultationId: string | null = null;
+    if (dto.consultationId) {
+      const c = await this.prisma.consultation.findUnique({
+        where: { id: dto.consultationId },
+        select: { id: true, patientId: true },
+      });
+      if (!c) throw new NotFoundException('Consulta no encontrada');
+      if (c.patientId !== patientId) {
+        throw new ForbiddenException(
+          'La consulta no pertenece a este paciente',
+        );
+      }
+      consultationId = c.id;
+    }
+
+    // 5. Persistir en DB
     return this.prisma.patientMedicalFile.create({
       data: {
         patientId,
+        consultationId,
         category: dto.category,
         description: dto.description,
         fileName: file.originalname,
