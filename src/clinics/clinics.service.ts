@@ -5,6 +5,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
+import { AppointmentStatus } from '@generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateClinicDTO } from './dto/create-clinic.dto';
 import { UpdateClinicDTO } from './dto/update-clinic.dto';
@@ -445,7 +446,7 @@ export class ClinicsService {
     doctorClinicId: string,
     query: GetAvailabilityDto,
   ) {
-    const { dateFrom, dateTo } = query;
+    const { dateFrom, dateTo, excludeAppointmentId } = query;
 
     if (dateFrom > dateTo) {
       throw new BadRequestException(
@@ -486,6 +487,21 @@ export class ClinicsService {
       },
     });
 
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        doctorClinicId,
+        id: excludeAppointmentId ? { not: excludeAppointmentId } : undefined,
+        status: {
+          notIn: ['CANCELLED', 'NO_SHOW', 'COMPLETED'] as AppointmentStatus[],
+        },
+        startTime: {
+          gte: new Date(`${dateFrom}T00:00:00-06:00`),
+          lte: new Date(`${dateTo}T23:59:59-06:00`),
+        },
+      },
+      select: { startTime: true },
+    });
+
     const availability: Record<string, string[]> = {};
 
     let currentDateStr = dateFrom;
@@ -493,15 +509,24 @@ export class ClinicsService {
       const weekDay = this.weekDayOf(currentDateStr);
       const override = overrides.find((o) => o.date === currentDateStr);
 
+      const appointmentsThisDay = appointments.filter(
+        (a) => this.formatToLocalDate(a.startTime) === currentDateStr,
+      );
+      const busyTimes = appointmentsThisDay.map((a) =>
+        this.formatToLocalTime(a.startTime),
+      );
+
       if (override) {
         if (override.type === 'UNAVAILABLE') {
           availability[currentDateStr] = [];
         } else if (override.startTime && override.endTime) {
-          // Cubre tanto CUSTOM como AVAILABLE
-          availability[currentDateStr] = this.generateTimeSlots(
+          const allSlots = this.generateTimeSlots(
             override.startTime,
             override.endTime,
             slotDuration,
+          );
+          availability[currentDateStr] = allSlots.filter(
+            (slot) => !busyTimes.includes(slot),
           );
         }
       } else {
@@ -524,7 +549,9 @@ export class ClinicsService {
         }
 
         const uniqueSlots = [...new Set(daySlots)].sort();
-        availability[currentDateStr] = uniqueSlots;
+        availability[currentDateStr] = uniqueSlots.filter(
+          (slot) => !busyTimes.includes(slot),
+        );
       }
 
       currentDateStr = this.nextDateStr(currentDateStr);
@@ -972,5 +999,27 @@ export class ClinicsService {
   private weekDayOf(dateStr: string): number {
     const [y, m, d] = dateStr.split('-').map(Number);
     return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  }
+
+  /**
+   * Helper para formatear Date a HH:MM en UTC-6
+   */
+  private formatToLocalTime(date: Date): string {
+    // Offset de -6 horas (Monterrey/CST)
+    const localDate = new Date(date.getTime() - 6 * 60 * 60 * 1000);
+    const h = String(localDate.getUTCHours()).padStart(2, '0');
+    const m = String(localDate.getUTCMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  }
+
+  /**
+   * Helper para formatear Date a YYYY-MM-DD en UTC-6
+   */
+  private formatToLocalDate(date: Date): string {
+    const localDate = new Date(date.getTime() - 6 * 60 * 60 * 1000);
+    const y = localDate.getUTCFullYear();
+    const m = String(localDate.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(localDate.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
 }

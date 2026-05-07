@@ -1,4 +1,4 @@
-import { IsDateString, IsNotEmpty } from 'class-validator';
+import { IsDateString, IsNotEmpty, IsOptional, IsUUID } from 'class-validator';
 
 export class GetAvailabilityDto {
   @IsNotEmpty()
@@ -8,4 +8,8 @@ export class GetAvailabilityDto {
   @IsNotEmpty()
   @IsDateString()
   dateTo: string;
+
+  @IsOptional()
+  @IsUUID()
+  excludeAppointmentId?: string;
 }

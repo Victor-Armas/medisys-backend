@@ -19,6 +19,7 @@ import {
 import { Prisma } from '@generated/prisma/browser';
 import { MedicalHistoryPDFProps } from 'src/pdf/templates/medical-history';
 import { PdfService } from 'src/pdf/pdf.service';
+import { calculateAge } from '../common/utils/date.utils';
 
 @Injectable()
 export class PatientsService {
@@ -330,8 +331,7 @@ export class PatientsService {
 
     if (!patient) throw new NotFoundException('Paciente no encontrado');
 
-    const age =
-      new Date().getFullYear() - new Date(patient.birthDate).getFullYear();
+    const age = calculateAge(patient.birthDate);
     const patientName = [
       patient.firstName,
       patient.middleName,

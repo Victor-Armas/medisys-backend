@@ -140,7 +140,7 @@ export class ConsultationsService {
           if (dto.appointmentId) {
             await tx.appointment.update({
               where: { id: dto.appointmentId },
-              data: { status: 'IN_PROGRESS' },
+              data: { status: 'COMPLETED' },
             });
           }
 
@@ -345,7 +345,9 @@ export class ConsultationsService {
           select: {
             doctorProfile: {
               select: {
-                user: { select: { id: true, firstName: true, lastNamePaternal: true } },
+                user: {
+                  select: { id: true, firstName: true, lastNamePaternal: true },
+                },
               },
             },
             clinic: { select: { id: true, name: true } },

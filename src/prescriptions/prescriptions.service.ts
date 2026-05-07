@@ -19,6 +19,7 @@ import {
   SELECT_PRESCRIPTION_ISSUE,
 } from './constants/prescription.select';
 import { PrescriptionTemplateProps } from 'src/pdf/templates/prescription';
+import { calculateAge } from '../common/utils/date.utils';
 
 @Injectable()
 export class PrescriptionsService {
@@ -285,7 +286,7 @@ export class PrescriptionsService {
 
     // Calcular edad
     const birthDate = prescription.patient.birthDate;
-    const age = new Date().getFullYear() - new Date(birthDate).getFullYear();
+    const age = calculateAge(birthDate);
 
     const patientName = [
       prescription.patient.firstName,

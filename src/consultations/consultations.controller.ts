@@ -30,6 +30,7 @@ import { ListConsultationsDTO } from './dto/list-consultations.dto';
 import { ConsultationTimelineQueryDTO } from './dto/consultation-timeline.dto';
 import { PdfService } from 'src/pdf/pdf.service';
 import { ConsultationNoteTemplateProps } from 'src/pdf/templates/consultation-note';
+import { calculateAge } from '../common/utils/date.utils';
 
 // Solo personal clínico accede al expediente
 const CLINICAL = ['ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR'] as const;
@@ -203,8 +204,7 @@ export class ConsultationsController {
     const doctor = c.doctorClinic.doctorProfile.user;
     const clinic = c.doctorClinic.clinic;
 
-    const age =
-      new Date().getFullYear() - new Date(c.patient.birthDate).getFullYear();
+    const age = calculateAge(c.patient.birthDate);
 
     const props: ConsultationNoteTemplateProps = {
       clinicName: clinic?.name ?? 'Consultorio',
