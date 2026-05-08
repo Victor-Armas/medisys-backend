@@ -9,5 +9,7 @@ export const USER_SELECT = {
   phone: true,
   photoUrl: true,
   isActive: true,
+  mustChangePassword: true, // ← nuevo
+  passwordChangedAt: true, // ← nuevo (auditoría)
   createdAt: true,
 } as const;

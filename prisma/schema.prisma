@@ -222,6 +222,9 @@ model User {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+  mustChangePassword Boolean   @default(false)   // true después de reset por admin
+  passwordChangedAt  DateTime?                    // auditoría del último cambio
+
   doctorProfile DoctorProfile?                          // Solo existe si el usuario es DOCTOR o MAIN_DOCTOR
 }
 

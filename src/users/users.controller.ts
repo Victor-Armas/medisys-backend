@@ -92,4 +92,12 @@ export class UsersController {
   ) {
     return this.usersService.uploadPhoto(id, file.buffer);
   }
+
+  // POST /api/users/:id/reset-password
+  // Solo ADMIN_SYSTEM y MAIN_DOCTOR pueden resetear contraseñas
+  @Post(':id/reset-password')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR')
+  resetPassword(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.resetPassword(id);
+  }
 }

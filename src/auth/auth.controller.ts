@@ -3,6 +3,7 @@ import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 // Extendemos el tipo Request de Express para incluir `user`.
 // NestJS lo agrega ahí después de que el JwtGuard valida el token,
@@ -35,5 +36,11 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   getProfile(@Req() req: RequestWithUser) {
     return req.user;
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  changePassword(@Req() req: RequestWithUser, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(req.user.id, dto.newPassword);
   }
 }

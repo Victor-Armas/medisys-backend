@@ -17,6 +17,7 @@ import { AppointmentsModule } from './appointments/appointments.module';
 import { ConsultationsModule } from './consultations/consultations.module';
 import { PrescriptionsModule } from './prescriptions/prescriptions.module';
 import { PdfModule } from './pdf/pdf.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { PdfModule } from './pdf/pdf.module';
     ConsultationsModule,
     PrescriptionsModule,
     PdfModule,
+    DashboardModule,
   ],
   providers: [
     // Aplica ThrottlerGuard a TODOS los endpoints de la app

@@ -21,32 +21,23 @@ export class AuthService {
    * 3. Compara el password con el hash guardado en DB
    * 4. Genera y retorna el JWT con los datos del usuario
    */
+  // Actualizar el método login para incluir mustChangePassword en la respuesta:
   async login(email: string, password: string) {
-    // Paso 1: buscar usuario
     const user = await this.usersService.findByEmail(email);
 
-    if (!user) {
-      throw new UnauthorizedException('Cuenta Inexistente');
-    }
+    if (!user) throw new UnauthorizedException('Cuenta Inexistente');
 
-    // Paso 2: comparar password con hash
-    // bcrypt.compare() hashea el password recibido y lo compara con el guardado
     const passwordValido = await bcrypt.compare(password, user.password);
-    if (!passwordValido) {
-      throw new UnauthorizedException('Password Incorrecto');
-    }
+    if (!passwordValido) throw new UnauthorizedException('Password Incorrecto');
 
-    // Paso 3: verificar que está activo
     if (!user.isActive) {
       throw new UnauthorizedException(
         'Tu cuenta está desactivada. Por favor, contacta al administrador',
       );
     }
 
-    // Paso 4: crear el payload del JWT
-    // Esto es lo que quedará "dentro" del token — no pongas info sensible aquí
     const payload = {
-      sub: user.id, // "sub" es el estándar JWT para el ID del usuario
+      sub: user.id,
       email: user.email,
       role: user.role,
       firstName: user.firstName,
@@ -54,16 +45,24 @@ export class AuthService {
     };
 
     return {
-      // jwtService.sign() firma el payload y genera el token
       access_token: this.jwtService.sign(payload),
-      // También retornamos datos básicos del usuario para el frontend
       user: {
         id: user.id,
         firstName: user.firstName,
         lastNamePaternal: user.lastNamePaternal,
         email: user.email,
         role: user.role,
+        mustChangePassword: user.mustChangePassword, // ← nuevo
       },
     };
+  }
+
+  /**
+   * Permite al usuario autenticado cambiar su propia contraseña.
+   * Limpia el flag mustChangePassword al completarse.
+   */
+  async changePassword(userId: string, newPassword: string): Promise<void> {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.usersService.updatePassword(userId, hashedPassword);
   }
 }

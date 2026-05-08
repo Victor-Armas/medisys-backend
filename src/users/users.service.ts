@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,6 +11,7 @@ import { Role } from '@generated/prisma/enums';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { USER_SELECT } from './constants/user.select';
 import { UpdateUserDTO } from './dto/update-user.dto';
+import { generateSecurePassword } from 'src/common/utils/password.utils';
 
 @Injectable()
 export class UsersService {
@@ -133,5 +135,56 @@ export class UsersService {
     });
 
     return { photoUrl: result.secure_url };
+  }
+
+  /**
+   * Resetea la contraseña de un usuario.
+   * Solo accesible por ADMIN_SYSTEM y MAIN_DOCTOR.
+   * Retorna la contraseña temporal en texto plano (mostrar UNA sola vez).
+   * Marca mustChangePassword=true para forzar cambio en el próximo login.
+   */
+  async resetPassword(
+    targetUserId: string,
+  ): Promise<{ temporaryPassword: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, role: true, isActive: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    // Los pacientes tienen su propio flujo — no mezclar
+    if (user.role === 'PATIENT') {
+      throw new ForbiddenException(
+        'No se puede resetear la contraseña de un paciente desde este endpoint',
+      );
+    }
+
+    const temporaryPassword = generateSecurePassword(12);
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: {
+        password: hashedPassword,
+        mustChangePassword: true,
+        passwordChangedAt: new Date(),
+      },
+    });
+
+    return { temporaryPassword };
+  }
+
+  async updatePassword(userId: string, hashedPassword: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+        mustChangePassword: false,
+        passwordChangedAt: new Date(),
+      },
+    });
   }
 }
