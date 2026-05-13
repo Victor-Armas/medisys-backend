@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   Document,
   Page,
@@ -33,6 +32,7 @@ export interface PrescriptionTemplateProps {
   doctorSpecialty?: string | null;
   doctorSignatureUrl?: string | null;
   includeSignature: boolean; // dynamic toggle
+  doctorUniversity: string;
   // Patient
   patientName: string;
   patientAge: number;
@@ -243,6 +243,7 @@ export function PrescriptionTemplate(props: PrescriptionTemplateProps) {
     items,
     patientInstructions,
     diagnosesSummary,
+    doctorUniversity,
   } = props;
 
   return (
@@ -274,6 +275,7 @@ export function PrescriptionTemplate(props: PrescriptionTemplateProps) {
             {doctorSpecialty && (
               <Text style={s.doctorSub}>{doctorSpecialty}</Text>
             )}
+            <Text style={s.doctorSub}>{doctorUniversity}</Text>
           </View>
         </View>
 
@@ -370,6 +372,7 @@ export function PrescriptionTemplate(props: PrescriptionTemplateProps) {
               )}
               <View style={s.signatureLine}>
                 <Text style={s.signatureText}>{doctorName}</Text>
+                <Text style={s.signatureText}>{doctorUniversity}</Text>
                 <Text style={s.signatureText}>Cédula: {doctorLicense}</Text>
               </View>
             </View>

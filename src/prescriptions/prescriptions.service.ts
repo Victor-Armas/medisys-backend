@@ -283,6 +283,10 @@ export class PrescriptionsService {
       throw new BadRequestException(
         'No se puede emitir una receta sin medicamentos',
       );
+    if (!prescription.doctorClinic.doctorProfile.university)
+      throw new BadRequestException(
+        'No se puede emitir una receta sin la Univercidad',
+      );
 
     // Calcular edad
     const birthDate = prescription.patient.birthDate;
@@ -310,6 +314,7 @@ export class PrescriptionsService {
       doctorName: prescription.doctorName,
       doctorLicense: prescription.doctorLicense,
       doctorSpecialty: prescription.doctorSpecialty,
+      doctorUniversity: prescription.doctorClinic.doctorProfile.university,
       doctorSignatureUrl:
         prescription.doctorClinic?.doctorProfile?.signatureUrl ?? null,
       includeSignature,

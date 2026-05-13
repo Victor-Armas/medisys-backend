@@ -63,7 +63,7 @@ export const SELECT_PRESCRIPTION_ISSUE = {
   doctorClinic: {
     select: {
       clinic: { select: { logoUrl: true } },
-      doctorProfile: { select: { signatureUrl: true } },
+      doctorProfile: { select: { signatureUrl: true, university: true } },
     },
   },
   patient: {

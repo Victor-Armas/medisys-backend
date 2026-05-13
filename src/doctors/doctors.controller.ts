@@ -20,6 +20,7 @@ import { CreateDoctorDTO } from './dto/create-doctor.dto';
 import { AssignDoctorProfileDTO } from './dto/assign-doctor-profile.dto';
 import { RequestWithUser } from '@auth/auth.controller';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { UpdateDoctorProfileDTO } from './dto/update-doctor-profile.dto';
 
 // Agrupa los endpoints en Swagger bajo "Doctors", no afecta la logica
 @ApiTags('Doctors')
@@ -109,6 +110,22 @@ export class DoctorsController {
   ) {
     return this.doctorsService.toggleSchedulePermission(
       doctorProfileId,
+      req.user.role,
+    );
+  }
+
+  // PATCH /api/doctors/profile/:doctorProfileId
+  @Patch('profile/:doctorProfileId')
+  @Roles('ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR')
+  UpdateProfile(
+    @Param('doctorProfileId', ParseUUIDPipe) doctorProfileId: string,
+    @Req() req: RequestWithUser,
+    @Body() dto: UpdateDoctorProfileDTO,
+  ) {
+    return this.doctorsService.updateProfile(
+      doctorProfileId,
+      dto,
+      req.user.id,
       req.user.role,
     );
   }

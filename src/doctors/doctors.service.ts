@@ -231,7 +231,9 @@ export class DoctorsService {
     if (!profile) throw new NotFoundException('Perfil médico no encontrado');
 
     const isOwn = profile.userId === requestingUserId;
-    const isAdmin = ['ADMIN_SYSTEM', 'MAIN_DOCTOR'].includes(userRole);
+    const isAdmin = ['ADMIN_SYSTEM', 'MAIN_DOCTOR', 'DOCTOR'].includes(
+      userRole,
+    );
 
     // Doctors can edit their own profile; admins can edit any
     if (!isOwn && !isAdmin) {
